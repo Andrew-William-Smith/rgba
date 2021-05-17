@@ -91,8 +91,7 @@ pub struct Branch {
 
 impl InstructionType for Branch {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Self> {
-        let mask = 0x0A00_0000;
-        ((raw & mask) == mask).then_some(Self {
+        ((raw & 0x0E00_0000) == 0x0A00_0000).then_some(Self {
             condition,
             // If bit 24 is set, this is a Branch with Link (bl).
             link: raw & (1 << 24) != 0,
@@ -125,8 +124,7 @@ pub struct BranchAndExchange {
 
 impl InstructionType for BranchAndExchange {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Self> {
-        let mask = 0x012F_FF10;
-        ((raw & mask) == mask).then_some(Self {
+        ((raw & 0x0FFF_FFF0) == 0x012F_FF10).then_some(Self {
             condition,
             // The register number is encoded in the low nybble of the instruction.
             source: (raw & 0xF) as RegisterNumber,
