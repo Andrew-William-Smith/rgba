@@ -1,5 +1,14 @@
 pub mod instruction;
 
+/// A memory address, denoting a pointer into the system's memory.
+pub type Address = u32;
+
+/// An offset from an `Address`, equivalent to a `ptrdiff_t`.
+pub type AddressOffset = i32;
+
+/// A register number, nominally restricted to the range `[0, 15]`.
+pub type RegisterNumber = u8;
+
 /// The operating mode of the ARM7TDMI CPU.  All modes other than `User` are
 /// privileged and thus can execute privileged instructions.
 pub enum Mode {

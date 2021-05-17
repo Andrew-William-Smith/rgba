@@ -1,3 +1,4 @@
+use crate::cpu::{AddressOffset, RegisterNumber};
 use derive_more::Display;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
@@ -85,7 +86,7 @@ pub struct Branch {
     /// instruction prefetch, the target address will be 8 bytes beyond that of
     /// the instruction itself; since the pipeline is simulated by `rgba`, this
     /// concern is ignored.
-    pub offset: i32,
+    pub offset: AddressOffset,
 }
 
 impl InstructionType for Branch {
@@ -103,12 +104,39 @@ impl InstructionType for Branch {
 
 impl fmt::Display for Branch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let instruction_link = if self.link { "l" } else { "" };
-        write!(
-            f,
-            "b{}{} {:+}",
-            instruction_link, self.condition, self.offset
-        )
+        let link_mnemonic = if self.link { "l" } else { "" };
+        write!(f, "b{}{} {:+}", link_mnemonic, self.condition, self.offset)
+    }
+}
+
+/// An indirect branch instruction that copies the value of a specified register
+/// into the program counter.  The *exchange* portion of this instruction refers
+/// to the fact that this instruction can switch between ARM and Thumb modes: if
+/// the register number is even, the processor will be placed in ARM mode
+/// following the branch, and if it is odd, it will be in Thumb mode.
+#[derive(Debug, Eq, PartialEq)]
+pub struct BranchAndExchange {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// The register whose value will be copied into the program counter.  The
+    /// behaviour of this instruction when this register is `r15` is undefined.
+    pub source: RegisterNumber,
+}
+
+impl InstructionType for BranchAndExchange {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Self> {
+        let mask = 0x012F_FF10;
+        ((raw & mask) == mask).then_some(Self {
+            condition,
+            // The register number is encoded in the low nybble of the instruction.
+            source: (raw & 0xF) as RegisterNumber,
+        })
+    }
+}
+
+impl fmt::Display for BranchAndExchange {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "bx{} r{}", self.condition, self.source)
     }
 }
 
@@ -118,6 +146,7 @@ impl fmt::Display for Branch {
 #[derive(Display, Eq, PartialEq)]
 pub enum Instruction {
     Branch(Branch),
+    BranchAndExchange(BranchAndExchange),
 }
 
 impl Instruction {
@@ -125,7 +154,9 @@ impl Instruction {
     /// instruction is not valid, `None` will be returned.
     pub fn decode(raw: RawInstruction) -> Option<Self> {
         let condition = Condition::from_u32(raw & 0xF000_0000)?;
-        Branch::decode(raw, condition).map(Self::Branch)
+        Branch::decode(raw, condition)
+            .map(Self::Branch)
+            .or_else(|| BranchAndExchange::decode(raw, condition).map(Self::BranchAndExchange))
     }
 }
 

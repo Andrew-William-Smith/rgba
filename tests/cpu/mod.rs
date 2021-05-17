@@ -4,7 +4,7 @@ mod decode_instruction;
 /// of the same type is working properly.
 #[macro_export]
 macro_rules! decode_succeeds {
-    ($($bytecode:literal => $type:ident, $decoded:expr => $disassembly:expr),+$(,)?) => {
+    ($type:ident, $($bytecode:literal => $decoded:expr => $disassembly:expr),+$(,)?) => {
         $(
             let result = Instruction::decode($bytecode);
             match result {
