@@ -63,15 +63,14 @@ fn branch_and_exchange() {
 
 #[test]
 fn data_processing() {
-    // Include all enums so these lines don't get too long.
+    // Include some enums so these lines don't get too long.
     use ArithmeticOperation::*;
-    use Condition::*;
     use DataOperand::*;
     use ShiftType::*;
 
     fn simple_instruction(operation: ArithmeticOperation, set_cpsr: bool) -> DataProcessing {
         DataProcessing {
-            condition: Always,
+            condition: Condition::Always,
             operation,
             set_cpsr,
             operand1: 1,
@@ -82,7 +81,7 @@ fn data_processing() {
 
     fn simple_data(operand2: DataOperand) -> DataProcessing {
         DataProcessing {
-            condition: Always,
+            condition: Condition::Always,
             operation: Add,
             set_cpsr: false,
             operand1: 1,
