@@ -62,6 +62,90 @@ fn branch_and_exchange() {
 }
 
 #[test]
+fn data_processing() {
+    // Include all enums so these lines don't get too long.
+    use ArithmeticOperation::*;
+    use Condition::*;
+    use DataOperand::*;
+    use ShiftType::*;
+
+    fn simple_instruction(operation: ArithmeticOperation, set_cpsr: bool) -> DataProcessing {
+        DataProcessing {
+            condition: Always,
+            operation,
+            set_cpsr,
+            operand1: 1,
+            destination: 0,
+            operand2: ShiftImmediate(LogicalShiftLeft, 0, 2),
+        }
+    }
+
+    fn simple_data(operand2: DataOperand) -> DataProcessing {
+        DataProcessing {
+            condition: Always,
+            operation: Add,
+            set_cpsr: false,
+            operand1: 1,
+            destination: 0,
+            operand2,
+        }
+    }
+
+    decode_succeeds!(
+        DataProcessing,
+        // Simple opcodes without the CPSR flag explicitly set.
+        0xE0010002 => simple_instruction(And, false) => "and r0,r1,r2",
+        0xE0210002 => simple_instruction(ExclusiveOr, false) => "eor r0,r1,r2",
+        0xE0410002 => simple_instruction(Subtract, false) => "sub r0,r1,r2",
+        0xE0610002 => simple_instruction(ReverseSubtract, false) => "rsb r0,r1,r2",
+        0xE0810002 => simple_instruction(Add, false) => "add r0,r1,r2",
+        0xE0A10002 => simple_instruction(AddWithCarry, false) => "adc r0,r1,r2",
+        0xE0C10002 => simple_instruction(SubtractWithCarry, false) => "sbc r0,r1,r2",
+        0xE0E10002 => simple_instruction(ReverseSubtractWithCarry, false) => "rsc r0,r1,r2",
+        0xE1010002 => simple_instruction(Test, false) => "tst r1,r2",
+        0xE1210002 => simple_instruction(TestEqual, false) => "teq r1,r2",
+        0xE1410002 => simple_instruction(CompareSubtract, false) => "cmp r1,r2",
+        0xE1610002 => simple_instruction(CompareAdd, false) => "cmn r1,r2",
+        0xE1810002 => simple_instruction(InclusiveOr, false) => "orr r0,r1,r2",
+        0xE1A10002 => simple_instruction(Move, false) => "mov r0,r2",
+        0xE1C10002 => simple_instruction(BitClear, false) => "bic r0,r1,r2",
+        0xE1E10002 => simple_instruction(MoveInverse, false) => "mvn r0,r2",
+        // Simple opcodes with the CPSR flag set; comparisons should not change.
+        0xE0110002 => simple_instruction(And, true) => "ands r0,r1,r2",
+        0xE0310002 => simple_instruction(ExclusiveOr, true) => "eors r0,r1,r2",
+        0xE0510002 => simple_instruction(Subtract, true) => "subs r0,r1,r2",
+        0xE0710002 => simple_instruction(ReverseSubtract, true) => "rsbs r0,r1,r2",
+        0xE0910002 => simple_instruction(Add, true) => "adds r0,r1,r2",
+        0xE0B10002 => simple_instruction(AddWithCarry, true) => "adcs r0,r1,r2",
+        0xE0D10002 => simple_instruction(SubtractWithCarry, true) => "sbcs r0,r1,r2",
+        0xE0F10002 => simple_instruction(ReverseSubtractWithCarry, true) => "rscs r0,r1,r2",
+        0xE1110002 => simple_instruction(Test, true) => "tst r1,r2",
+        0xE1310002 => simple_instruction(TestEqual, true) => "teq r1,r2",
+        0xE1510002 => simple_instruction(CompareSubtract, true) => "cmp r1,r2",
+        0xE1710002 => simple_instruction(CompareAdd, true) => "cmn r1,r2",
+        0xE1910002 => simple_instruction(InclusiveOr, true) => "orrs r0,r1,r2",
+        0xE1B10002 => simple_instruction(Move, true) => "movs r0,r2",
+        0xE1D10002 => simple_instruction(BitClear, true) => "bics r0,r1,r2",
+        0xE1F10002 => simple_instruction(MoveInverse, true) => "mvns r0,r2",
+        // Immediate operand.
+        0xE2810C0F => simple_data(Immediate(0xF00)) => "add r0,r1,#0xF00",
+        // Shift operand 2 by an immediate value.
+        0xE0810382 => simple_data(ShiftImmediate(LogicalShiftLeft, 7, 2)) => "add r0,r1,r2,lsl #7",
+        0xE08103A2 => simple_data(ShiftImmediate(LogicalShiftRight, 7, 2)) => "add r0,r1,r2,lsr #7",
+        0xE08103C2 => simple_data(ShiftImmediate(ArithmeticShiftRight, 7, 2)) => "add r0,r1,r2,asr #7",
+        0xE08103E2 => simple_data(ShiftImmediate(RotateRight, 7, 2)) => "add r0,r1,r2,ror #7",
+        0xE0810062 => simple_data(ShiftImmediate(RotateRight, 0, 2)) => "add r0,r1,r2,rrx",
+        // Shift operand 2 by a register value.
+        0xE0810312 => simple_data(ShiftRegister(LogicalShiftLeft, 3, 2)) => "add r0,r1,r2,lsl r3",
+        0xE0810332 => simple_data(ShiftRegister(LogicalShiftRight, 3, 2)) => "add r0,r1,r2,lsr r3",
+        0xE0810352 => simple_data(ShiftRegister(ArithmeticShiftRight, 3, 2)) => "add r0,r1,r2,asr r3",
+        0xE0810372 => simple_data(ShiftRegister(RotateRight, 3, 2)) => "add r0,r1,r2,ror r3",
+        // Using R0 as a ROR operand should not disassemble as RRX.
+        0xE0810072 => simple_data(ShiftRegister(RotateRight, 0, 2)) => "add r0,r1,r2,ror r0",
+    );
+}
+
+#[test]
 fn multiply() {
     decode_succeeds!(
         Multiply,

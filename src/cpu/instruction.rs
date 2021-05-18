@@ -82,7 +82,7 @@ impl fmt::Display for Condition {
 /// processing) instruction.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
-pub enum ArithmeticOpcode {
+pub enum ArithmeticOperation {
     /// `Rd := Op1 AND Op2`; mnemonic `and`.
     And,
     /// `Rd := Op1 XOR Op2`; mnemonic `eor`.
@@ -118,14 +118,14 @@ pub enum ArithmeticOpcode {
 }
 
 /// The Assembly mnemonics used for each arithmetic opcode.
-const ARITHMETIC_OPCODE_MNEMONICS: [&str; 16] = [
+const ARITHMETIC_OPERATION_MNEMONICS: [&str; 16] = [
     "and", "eor", "sub", "rsb", "add", "adc", "sbc", "rsc", "tst", "teq", "cmp", "cmn", "orr",
     "mov", "bic", "mvn",
 ];
 
-impl fmt::Display for ArithmeticOpcode {
+impl fmt::Display for ArithmeticOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", ARITHMETIC_OPCODE_MNEMONICS[*self as usize])
+        write!(f, "{}", ARITHMETIC_OPERATION_MNEMONICS[*self as usize])
     }
 }
 
@@ -225,12 +225,15 @@ impl fmt::Display for DataOperand {
             Self::ShiftImmediate(shift_type, shift_amount, source) => {
                 let shift = if shift_type == ShiftType::RotateRight && shift_amount == 0 {
                     // "ror #0" has the special form "rrx" involving the carry flag.
-                    String::from("rrx")
+                    String::from(",rrx")
+                } else if shift_type == ShiftType::LogicalShiftLeft && shift_amount == 0 {
+                    // "lsl #0" is a no-op, so we don't need to disassemble it at all.
+                    String::from("")
                 } else {
                     let mnemonic = SHIFT_TYPE_MNEMONICS[shift_type as usize];
-                    format!("{} #{}", mnemonic, shift_amount)
+                    format!(",{} #{}", mnemonic, shift_amount)
                 };
-                write!(f, "r{},{}", source, shift)
+                write!(f, "r{}{}", source, shift)
             }
             Self::ShiftRegister(shift_type, shift_register, source) => {
                 let shift_mnemonic = SHIFT_TYPE_MNEMONICS[shift_type as usize];
@@ -310,6 +313,78 @@ impl InstructionType for BranchAndExchange {
 impl fmt::Display for BranchAndExchange {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "bx{} r{}", self.condition, self.source)
+    }
+}
+
+/// A data processing operation, comprising most ARM instructions that utilise
+/// the ALU.
+#[derive(Debug, Eq, PartialEq)]
+pub struct DataProcessing {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// The operation to be performed by the ALU for this instruction.
+    pub operation: ArithmeticOperation,
+    /// Whether the condition codes in the CPSR should be affected as a result
+    /// of this operation.
+    pub set_cpsr: bool,
+    /// The register whose value will be used as the first operand of this
+    /// instruction if the `operation` requires two operands.
+    pub operand1: RegisterNumber,
+    /// The register in which the result of this operation will be stored.
+    pub destination: RegisterNumber,
+    /// The operand that is always used in this instruction.  Decoded from the
+    /// low bits of the machine code as either an immediate value or a shifted
+    /// register value dependent upon the value of bit 25 (`I`).
+    pub operand2: DataOperand,
+}
+
+impl InstructionType for DataProcessing {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Self> {
+        ((raw & 0x0C00_0000) == 0).then_some(Self {
+            condition,
+            operation: ArithmeticOperation::from_u32(select_bits(raw, 21, 4))?,
+            set_cpsr: bit_is_set(raw, 20),
+            operand1: select_bits(raw, 16, 4) as RegisterNumber,
+            destination: select_bits(raw, 12, 4) as RegisterNumber,
+            operand2: if bit_is_set(raw, 25) {
+                DataOperand::decode_immediate(raw)
+            } else {
+                DataOperand::decode_register(raw)
+            },
+        })
+    }
+}
+
+impl fmt::Display for DataProcessing {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use ArithmeticOperation::*;
+        let cpsr_suffix = if self.set_cpsr { "s" } else { "" };
+
+        match self.operation {
+            // Single-operand instructions.
+            Move | MoveInverse => write!(
+                f,
+                "{}{}{} r{},{}",
+                self.operation, self.condition, cpsr_suffix, self.destination, self.operand2
+            ),
+            // Dual-operand instructions that do not produce a result and implicitly set the CPSR.
+            CompareSubtract | CompareAdd | Test | TestEqual => write!(
+                f,
+                "{}{} r{},{}",
+                self.operation, self.condition, self.operand1, self.operand2
+            ),
+            // Dual-operand instructions that produce a result and may or may not set the CPSR.
+            _ => write!(
+                f,
+                "{}{}{} r{},r{},{}",
+                self.operation,
+                self.condition,
+                cpsr_suffix,
+                self.destination,
+                self.operand1,
+                self.operand2
+            ),
+        }
     }
 }
 
@@ -524,6 +599,7 @@ impl fmt::Display for SoftwareInterrupt {
 pub enum Instruction {
     Branch(Branch),
     BranchAndExchange(BranchAndExchange),
+    DataProcessing(DataProcessing),
     Multiply(Multiply),
     MultiplyLong(MultiplyLong),
     SingleDataSwap(SingleDataSwap),
@@ -549,7 +625,14 @@ impl Instruction {
     pub fn decode(raw: RawInstruction) -> Option<Self> {
         let condition = Condition::from_u32(raw >> 28)?;
         decode_pipeline!(
-            raw, condition => Branch, Multiply, MultiplyLong, BranchAndExchange, SingleDataSwap, SoftwareInterrupt,
+            raw, condition =>
+            Branch,
+            Multiply,
+            MultiplyLong,
+            BranchAndExchange,
+            SingleDataSwap,
+            DataProcessing,
+            SoftwareInterrupt,
         )
     }
 }
