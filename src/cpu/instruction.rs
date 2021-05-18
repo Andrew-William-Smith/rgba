@@ -16,35 +16,35 @@ pub type RawInstruction = u32;
 #[repr(u32)]
 pub enum Condition {
     /// Values are equal (`Z` flag set, suffix `eq`).
-    Equal = 0,
+    Equal,
     /// Values are not equal (`Z` flag clear, suffix `ne`).
-    NotEqual = 1 << 28,
+    NotEqual,
     /// Unsigned greater than or equal (`C` flag set, suffix `cs`).
-    HigherOrSame = 2 << 28,
+    HigherOrSame,
     /// Unsigned less than (`C` flag clear, suffix `cc`).
-    Lower = 3 << 28,
+    Lower,
     /// Value is negative (`N` flag set, suffix `mi`).
-    Negative = 4 << 28,
+    Negative,
     /// Value is non-negative (`N` flag clear, suffix `pl`).
-    NonNegative = 5 << 28,
+    NonNegative,
     /// Signed operation overflowed (`V` flag set, suffix `vs`).
-    Overflow = 6 << 28,
+    Overflow,
     /// Signed operation did not overflow (`V` flag clear, suffix `vc`).
-    NoOverflow = 7 << 28,
+    NoOverflow,
     /// Unsigned greater than (`C` set and `Z` clear, suffix `hi`).
-    Higher = 8 << 28,
+    Higher,
     /// Unsigned less than or equal (`C` clear or `Z` set, suffix `ls`).
-    LowerOrSame = 9 << 28,
+    LowerOrSame,
     /// Signed greater than or equal (`N == V`, suffix `ge`).
-    GreaterOrEqual = 10 << 28,
+    GreaterOrEqual,
     /// Signed less than (`N != V`, suffix `lt`).
-    Less = 11 << 28,
+    Less,
     /// Signed greater than (`Z` flag clear and `N == V`, suffix `gt`).
-    Greater = 12 << 28,
+    Greater,
     /// Signed less than or equal (`Z` flag set or `N != V`, suffix `le`).
-    LessOrEqual = 13 << 28,
+    LessOrEqual,
     /// Execute unconditionally (suffix `al`).
-    Always = 14 << 28,
+    Always,
 }
 
 /// The Assembly mnemonics used for each execution condition.
@@ -54,7 +54,58 @@ const CONDITION_MNEMONICS: [&str; 15] = [
 
 impl fmt::Display for Condition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", CONDITION_MNEMONICS[(*self as u32 >> 28) as usize])
+        write!(f, "{}", CONDITION_MNEMONICS[*self as usize])
+    }
+}
+
+/// The operations permissible in the `OpCode` field of an arithmetic (data
+/// processing) instruction.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, FromPrimitive, ToPrimitive)]
+#[repr(u32)]
+pub enum ArithmeticOpcode {
+    /// `Rd := Op1 AND Op2`; mnemonic `and`.
+    And,
+    /// `Rd := Op1 XOR Op2`; mnemonic `eor`.
+    ExclusiveOr,
+    /// `Rd := Op1 - Op2`; mnemonic `sub`.
+    Subtract,
+    /// `Rd := Op2 - Op1`; mnemonic `rsb`.
+    ReverseSubtract,
+    /// `Rd := Op1 + Op2`; mnemonic `add`.
+    Add,
+    /// `Rd := Op1 + Op2 + C`; mnemonic `adc`.
+    AddWithCarry,
+    /// `Rd := Op1 - Op2 + C - 1`; mnemonic `sbc`.
+    SubtractWithCarry,
+    /// `Rd := Op2 - Op1 + C - 1`; mnemonic `rsc`.
+    ReverseSubtractWithCarry,
+    /// Set condition codes on `Op1 AND Op2`; mnemonic `tst`.
+    Test,
+    /// Set condition codes on `Op1 XOR Op2`; mnemonic `teq`.
+    TestEqual,
+    /// Set condition codes on `Op1 - Op2`; mnemonic `cmp`.
+    CompareSubtract,
+    /// Set condition codes on `Op1 + Op2`; mnemonic `cmn`.
+    CompareAdd,
+    /// `Rd := Op1 OR Op2`; mnemonic `orr`.
+    InclusiveOr,
+    /// `Rd := Op2`; mnemonic `mov`.
+    Move,
+    /// `Rd := Op1 AND NOT Op2`; mnemonic `bic`.
+    BitClear,
+    /// `Rd := NOT Op2`; mnemonic `mvn`.
+    MoveInverse,
+}
+
+/// The Assembly mnemonics used for each arithmetic opcode.
+const ARITHMETIC_OPCODE_MNEMONICS: [&str; 16] = [
+    "and", "eor", "sub", "rsb", "add", "adc", "sbc", "rsc", "tst", "teq", "cmp", "cmn", "orr",
+    "mov", "bic", "mvn",
+];
+
+impl fmt::Display for ArithmeticOpcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", ARITHMETIC_OPCODE_MNEMONICS[*self as usize])
     }
 }
 
@@ -385,7 +436,7 @@ impl Instruction {
     /// Decode the specified instruction, if it can be decoded.  If the
     /// instruction is not valid, `None` will be returned.
     pub fn decode(raw: RawInstruction) -> Option<Self> {
-        let condition = Condition::from_u32(raw & 0xF000_0000)?;
+        let condition = Condition::from_u32(raw >> 28)?;
         decode_pipeline!(
             raw, condition => Branch, Multiply, MultiplyLong, BranchAndExchange, SingleDataSwap, SoftwareInterrupt,
         )
