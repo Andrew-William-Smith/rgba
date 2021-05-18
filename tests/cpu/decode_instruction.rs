@@ -1,7 +1,5 @@
 use crate::decode_succeeds;
-use rgba::cpu::instruction::{
-    Branch, BranchAndExchange, Condition, Instruction, SoftwareInterrupt,
-};
+use rgba::cpu::instruction::*;
 
 /// Assert that the condition of each decoded instructions matches the expected
 /// condition.
@@ -60,6 +58,21 @@ fn branch_and_exchange() {
         0xE12FFF10 => BranchAndExchange { condition: Condition::Always, source: 0 } => "bx r0",
         0x212FFF17 => BranchAndExchange { condition: Condition::HigherOrSame, source: 7 } => "bxcs r7",
         0xD12FFF1A => BranchAndExchange { condition: Condition::LessOrEqual, source: 10 } => "bxle r10",
+    );
+}
+
+#[test]
+fn multiply() {
+    decode_succeeds!(
+        Multiply,
+        // Permutations of accumulate and condition code control bits.
+        0xE0000192 => Multiply { condition: Condition::Always, accumulate: false, set_cpsr: false, destination: 0, addend: 0, multiplicand1: 1, multiplicand2: 2 } => "mul r0,r2,r1",
+        0xE0100192 => Multiply { condition: Condition::Always, accumulate: false, set_cpsr: true, destination: 0, addend: 0, multiplicand1: 1, multiplicand2: 2 } => "muls r0,r2,r1",
+        0xE0201293 => Multiply { condition: Condition::Always, accumulate: true, set_cpsr: false, destination: 0, addend: 1, multiplicand1: 2, multiplicand2: 3 } => "mla r0,r3,r2,r1",
+        0xE0301293 => Multiply { condition: Condition::Always, accumulate: true, set_cpsr: true, destination: 0, addend: 1, multiplicand1: 2, multiplicand2: 3 } => "mlas r0,r3,r2,r1",
+        // With some different condition codes.
+        0x00314392 => Multiply { condition: Condition::Equal, accumulate: true, set_cpsr: true, destination: 1, addend: 4, multiplicand1: 3, multiplicand2: 2 } => "mlaeqs r1,r2,r3,r4",
+        0xA0130192 => Multiply { condition: Condition::GreaterOrEqual, accumulate: false, set_cpsr: true, destination: 3, addend: 0, multiplicand1: 1, multiplicand2: 2 } => "mulges r3,r2,r1",
     );
 }
 

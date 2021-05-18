@@ -58,9 +58,22 @@ impl fmt::Display for Condition {
     }
 }
 
+/// Determine whether the bit at the specified `index`, counted from the least
+/// significant bit, is set in the specified `value`.
+fn bit_is_set(value: u32, index: u8) -> bool {
+    value & (1 << index) != 0
+}
+
+/// Select the specified number of bits (`size`) beginning at the specified
+/// `low_bit` index in the specified `value`.  The resulting value will feature
+/// the low bit shifted into index `0`.
+fn select_bits(value: u32, low_bit: u8, size: u8) -> u32 {
+    (value >> low_bit) & ((1 << size) - 1)
+}
+
 /// Extend the value of the bit in the specified `sign_bit` of the specified
 /// `value` through all bits above the sign bit.
-fn sign_extend(value: u32, sign_bit: u32) -> i32 {
+fn sign_extend(value: u32, sign_bit: u8) -> i32 {
     let shift = 31 - sign_bit;
     ((value as i32) << shift) >> shift
 }
@@ -94,7 +107,7 @@ impl InstructionType for Branch {
         ((raw & 0x0E00_0000) == 0x0A00_0000).then_some(Self {
             condition,
             // If bit 24 is set, this is a Branch with Link (bl).
-            link: raw & (1 << 24) != 0,
+            link: bit_is_set(raw, 24),
             // 24-bit offset must be shifted 2 bits to the right.
             offset: sign_extend(raw << 2, 25),
         })
@@ -135,6 +148,61 @@ impl InstructionType for BranchAndExchange {
 impl fmt::Display for BranchAndExchange {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "bx{} r{}", self.condition, self.source)
+    }
+}
+
+/// A multiply or multiply-accumulate instruction, which multiplies the
+/// specified integer operands (`mul`) and may optionally also add the value of
+/// an additional register to the result (`mla`).  As with all arithmetic
+/// operations, this operation may or may not modify the CPSR as specified.
+#[derive(Debug, Eq, PartialEq)]
+pub struct Multiply {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// Whether the addend register should be added to the result of the
+    /// multiply operation (mnemonic `mla`).
+    pub accumulate: bool,
+    /// Whether the condition codes in the CPSR should be affected as a result
+    /// of this operation.
+    pub set_cpsr: bool,
+    /// The register `Rd` in which the product should be stored.
+    pub destination: RegisterNumber,
+    /// The register `Rn` from which the addend of this operation should be
+    /// sourced when `accumulate` is `true`.
+    pub addend: RegisterNumber,
+    /// The register `Rs` from which the first multiplicand should be sourced.
+    pub multiplicand1: RegisterNumber,
+    /// The register `Rm` from which the second multiplicand should be sourced.
+    pub multiplicand2: RegisterNumber,
+}
+
+impl InstructionType for Multiply {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Self> {
+        ((raw & 0x0FC0_00F0) == 0x0000_0090).then_some(Self {
+            condition,
+            accumulate: bit_is_set(raw, 21),
+            set_cpsr: bit_is_set(raw, 20),
+            destination: select_bits(raw, 16, 4) as RegisterNumber,
+            addend: select_bits(raw, 12, 4) as RegisterNumber,
+            multiplicand1: select_bits(raw, 8, 4) as RegisterNumber,
+            multiplicand2: (raw & 0xF) as RegisterNumber,
+        })
+    }
+}
+
+impl fmt::Display for Multiply {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let suffix = if self.set_cpsr { "s" } else { "" };
+        let common = format!(
+            "{}{} r{},r{},r{}",
+            self.condition, suffix, self.destination, self.multiplicand2, self.multiplicand1
+        );
+
+        if self.accumulate {
+            write!(f, "mla{},r{}", common, self.addend)
+        } else {
+            write!(f, "mul{}", common)
+        }
     }
 }
 
@@ -182,6 +250,7 @@ impl fmt::Display for SoftwareInterrupt {
 pub enum Instruction {
     Branch(Branch),
     BranchAndExchange(BranchAndExchange),
+    Multiply(Multiply),
     SoftwareInterrupt(SoftwareInterrupt),
 }
 
@@ -204,7 +273,7 @@ impl Instruction {
     pub fn decode(raw: RawInstruction) -> Option<Self> {
         let condition = Condition::from_u32(raw & 0xF000_0000)?;
         decode_pipeline!(
-            raw, condition => Branch, BranchAndExchange, SoftwareInterrupt,
+            raw, condition => Branch, Multiply, BranchAndExchange, SoftwareInterrupt,
         )
     }
 }
