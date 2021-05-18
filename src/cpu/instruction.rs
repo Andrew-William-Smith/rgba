@@ -104,7 +104,7 @@ impl InstructionType for Branch {
 impl fmt::Display for Branch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let link_mnemonic = if self.link { "l" } else { "" };
-        write!(f, "b{}{} {:+}", link_mnemonic, self.condition, self.offset)
+        write!(f, "b{}{} #{:+}", link_mnemonic, self.condition, self.offset)
     }
 }
 
@@ -138,6 +138,43 @@ impl fmt::Display for BranchAndExchange {
     }
 }
 
+/// A software interrupt instruction (`swi`), which switches the CPU into
+/// Supervisor mode and sets the program counter to the software interrupt
+/// vector at address `8`.  This vector itself should be a branch instruction to
+/// the actual interrupt handler.
+#[derive(Debug, Eq, PartialEq)]
+pub struct SoftwareInterrupt {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// A 24-bit comment included in the instruction that is completely ignored
+    /// by the CPU.  This field can be used to pass data to the interrupt
+    /// handler, which can access it via the following instruction sequence
+    /// (note that the old program counter is stored in `r14_svc`):
+    ///
+    /// ```arm
+    /// ldr r0, [r14, #-4]       ; Load SWI instruction into r0.
+    /// bic r0, r0, #0xFF000000  ; Clear SWI bits, leaving only the comment.
+    /// ```
+    pub comment: u32,
+}
+
+impl InstructionType for SoftwareInterrupt {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Self> {
+        let mask = 0x0F00_0000;
+        ((raw & mask) == mask).then_some(Self {
+            condition,
+            // The comment comprises the entire instruction after the condition and SWI identifier.
+            comment: raw & 0x00FF_FFFF,
+        })
+    }
+}
+
+impl fmt::Display for SoftwareInterrupt {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "swi{} #{:#X}", self.condition, self.comment)
+    }
+}
+
 /// A decoded instruction, converted from a `RawInstruction` by the decode unit.
 /// Contains all information in the instruction required for execution in the
 /// Execute stage.
@@ -145,6 +182,7 @@ impl fmt::Display for BranchAndExchange {
 pub enum Instruction {
     Branch(Branch),
     BranchAndExchange(BranchAndExchange),
+    SoftwareInterrupt(SoftwareInterrupt),
 }
 
 impl Instruction {
@@ -155,6 +193,7 @@ impl Instruction {
         Branch::decode(raw, condition)
             .map(Self::Branch)
             .or_else(|| BranchAndExchange::decode(raw, condition).map(Self::BranchAndExchange))
+            .or_else(|| SoftwareInterrupt::decode(raw, condition).map(Self::SoftwareInterrupt))
     }
 }
 
