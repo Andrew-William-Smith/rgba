@@ -4,6 +4,26 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use std::fmt;
 
+/// Determine whether the bit at the specified `index`, counted from the least
+/// significant bit, is set in the specified `value`.
+fn bit_is_set(value: u32, index: u8) -> bool {
+    value & (1 << index) != 0
+}
+
+/// Select the specified number of bits (`size`) beginning at the specified
+/// `low_bit` index in the specified `value`.  The resulting value will feature
+/// the low bit shifted into index `0`.
+fn select_bits(value: u32, low_bit: u8, size: u8) -> u32 {
+    (value >> low_bit) & ((1 << size) - 1)
+}
+
+/// Extend the value of the bit in the specified `sign_bit` of the specified
+/// `value` through all bits above the sign bit.
+fn sign_extend(value: u32, sign_bit: u8) -> i32 {
+    let shift = 31 - sign_bit;
+    ((value as i32) << shift) >> shift
+}
+
 /// The type of an instruction upon being fetched from memory.  Raw instructions
 /// are converted to `Instruction`s in the Decode stage.
 pub type RawInstruction = u32;
@@ -109,24 +129,115 @@ impl fmt::Display for ArithmeticOpcode {
     }
 }
 
-/// Determine whether the bit at the specified `index`, counted from the least
-/// significant bit, is set in the specified `value`.
-fn bit_is_set(value: u32, index: u8) -> bool {
-    value & (1 << index) != 0
+/// The types of register value manipulation that can be performed in a
+/// register-shift operand for data processing instructions.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, FromPrimitive, ToPrimitive)]
+#[repr(u32)]
+pub enum ShiftType {
+    /// Perform a logical left shift, shifting the value of the register to the
+    /// left by the specified number of bits without sign extension and
+    /// discarding any bits that are shifted out from the resultant value.  The
+    /// carry flag is set to the value of the least significant bit that was
+    /// shifted out for *logical* operations only; if the shift amount is `0`,
+    /// this flag is not modified.  Mnemonic: `lsl`.
+    LogicalShiftLeft,
+    /// Perform a logical right shift, shifting the value of the register to the
+    /// right by the specified number of bits without sign extension and
+    /// discarding any bits that are shifted out from the resultant value.  If
+    /// the shift amount is `0`, then the actual shift performed is 32 bits,
+    /// resulting in the entire value of the register being shifted out.  For
+    /// *logical* operations, the carry flag is set to the most significant bit
+    /// that was shifted out.  Mnemonic: `lsr`.
+    LogicalShiftRight,
+    /// Perform an arithmetic right shift, which is identical to the logical
+    /// right shift except the most significant bit of the source register's
+    /// value will be extended through all the most significant values shifted
+    /// in.  This behaviour approximates two's complement division by a power of
+    /// 2 for both signed and unsigned values.  Mnemonic: `asr`.
+    ArithmeticShiftRight,
+    /// Perform a rightward rotation, in which the value of the register is
+    /// shifted to the right by the specified amount and the values carried out
+    /// are wrapped around to the most significant bits of the resultant value.
+    /// The mnemonic for this form of the instruction is `ror`.  If the amount
+    /// by which to rotate is `0`, then the value is shifted to the right by 1
+    /// bit and the carry flag is carried into the most significant bit; the
+    /// mnemonic for this form of the shift is `rrx` and is only used when
+    /// shifting by an immediate `#0`.  The carry flag is modified as in the
+    /// other shift types.
+    RotateRight,
 }
 
-/// Select the specified number of bits (`size`) beginning at the specified
-/// `low_bit` index in the specified `value`.  The resulting value will feature
-/// the low bit shifted into index `0`.
-fn select_bits(value: u32, low_bit: u8, size: u8) -> u32 {
-    (value >> low_bit) & ((1 << size) - 1)
+/// The Assembly mnemonics used for each register shift type.
+const SHIFT_TYPE_MNEMONICS: [&str; 4] = ["lsl", "lsr", "asr", "ror"];
+
+/// The complex operand in a data-processing operation, which may consist of
+/// either the barrel shifter-modified value of a register or a limited subset
+/// of immediate values that can be specified as a value rotated rightward by a
+/// multiple of 2.
+#[derive(Debug, Eq, PartialEq)]
+pub enum DataOperand {
+    /// The operand is an immediate value.  The encoding of these values is
+    /// extremely idiosyncratic, consisting of an 8-bit unsigned value that can
+    /// be right-rotated by a 4-bit field, which is itself implicitly multiplied
+    /// by 2.  The rotation logic itself is performed by the decoder.
+    Immediate(u32),
+    /// The operand is a register value (2) shifted by an immediate amount (1).
+    ShiftImmediate(ShiftType, u8, RegisterNumber),
+    /// The operand is a register value (2) shifted by the value stored in the
+    /// low byte of another register (1).  Note that the exceptions documented
+    /// for shift values of `0` do not apply when a register is used as the
+    /// shift operand: instead, shifting by a register value `0` is a no-op.
+    ShiftRegister(ShiftType, RegisterNumber, RegisterNumber),
 }
 
-/// Extend the value of the bit in the specified `sign_bit` of the specified
-/// `value` through all bits above the sign bit.
-fn sign_extend(value: u32, sign_bit: u8) -> i32 {
-    let shift = 31 - sign_bit;
-    ((value as i32) << shift) >> shift
+impl DataOperand {
+    /// Decode an immediate data operand in the low 12 bits of the specified
+    /// `spec`ification, as described for the `Immediate` variant.
+    pub fn decode_immediate(spec: u32) -> Self {
+        let value = spec & 0xFF;
+        let rotation = select_bits(spec, 8, 4) * 2;
+        Self::Immediate(value.rotate_right(rotation))
+    }
+
+    /// Decode a register data operand in the low 12 bits of the specified
+    /// `spec`ification, as described for the `ShiftImmediate` and
+    /// `ShiftRegister` variants.
+    pub fn decode_register(spec: u32) -> Self {
+        let source_register = (spec & 0xF) as RegisterNumber;
+        let shift_type = ShiftType::from_u32(select_bits(spec, 5, 2)).unwrap();
+
+        if bit_is_set(spec, 4) {
+            // If bit 4 is set, the shift amount is stored in a register.
+            let shift_register = select_bits(spec, 8, 4) as RegisterNumber;
+            Self::ShiftRegister(shift_type, shift_register, source_register)
+        } else {
+            // Shift amount is an immediate value.
+            let shift_amount = select_bits(spec, 7, 5) as u8;
+            Self::ShiftImmediate(shift_type, shift_amount, source_register)
+        }
+    }
+}
+
+impl fmt::Display for DataOperand {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Self::Immediate(value) => write!(f, "#{:#X}", value),
+            Self::ShiftImmediate(shift_type, shift_amount, source) => {
+                let shift = if shift_type == ShiftType::RotateRight && shift_amount == 0 {
+                    // "ror #0" has the special form "rrx" involving the carry flag.
+                    String::from("rrx")
+                } else {
+                    let mnemonic = SHIFT_TYPE_MNEMONICS[shift_type as usize];
+                    format!("{} #{}", mnemonic, shift_amount)
+                };
+                write!(f, "r{},{}", source, shift)
+            }
+            Self::ShiftRegister(shift_type, shift_register, source) => {
+                let shift_mnemonic = SHIFT_TYPE_MNEMONICS[shift_type as usize];
+                write!(f, "r{},{} r{}", source, shift_mnemonic, shift_register)
+            }
+        }
+    }
 }
 
 /// A specific type of ARM instruction with a unique encoding scheme.
