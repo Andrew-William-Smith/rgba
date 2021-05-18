@@ -95,6 +95,16 @@ fn multiply_long() {
 }
 
 #[test]
+fn single_data_swap() {
+    decode_succeeds!(
+        SingleDataSwap,
+        0xE1020091 => SingleDataSwap { condition: Condition::Always, swap_byte: false, address: 2, destination: 0, source: 1 } => "swp r0,r1,[r2]",
+        0xE1420091 => SingleDataSwap { condition: Condition::Always, swap_byte: true, address: 2, destination: 0, source: 1 } => "swpb r0,r1,[r2]",
+        0x314AC09B => SingleDataSwap { condition: Condition::Lower, swap_byte: true, address: 10, destination: 12, source: 11 } => "swpccb r12,r11,[r10]",
+    );
+}
+
+#[test]
 fn software_interrupt() {
     decode_succeeds!(
         SoftwareInterrupt,

@@ -273,6 +273,51 @@ impl fmt::Display for MultiplyLong {
     }
 }
 
+/// An atomic data swap of either an entire word or a single byte.  On
+/// multiprocessor systems, the bus is locked for the entire duration of this
+/// instruction; however, on the uniprocessor GBA, this instruction is exactly
+/// identical to an `ldr` followed by an `str`.
+#[derive(Debug, Eq, PartialEq)]
+pub struct SingleDataSwap {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// Whether this instruction should swap an entire word at once (`false`) or
+    /// only a single byte (`true`).
+    pub swap_byte: bool,
+    /// The base register `Rn` in which the memory address of the quantity to
+    /// swap is stored.
+    pub address: RegisterNumber,
+    /// The register `Rd` in which the old contents of memory at the target
+    /// `address` should be stored following the swap.
+    pub destination: RegisterNumber,
+    /// The register `Rm` whose contents should be written to memory at the
+    /// target `address`.
+    pub source: RegisterNumber,
+}
+
+impl InstructionType for SingleDataSwap {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Self> {
+        ((raw & 0x0FB0_0FF0) == 0x0100_0090).then_some(Self {
+            condition,
+            swap_byte: bit_is_set(raw, 22),
+            address: select_bits(raw, 16, 4) as RegisterNumber,
+            destination: select_bits(raw, 12, 4) as RegisterNumber,
+            source: (raw & 0xF) as RegisterNumber,
+        })
+    }
+}
+
+impl fmt::Display for SingleDataSwap {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let byte_suffix = if self.swap_byte { "b" } else { "" };
+        write!(
+            f,
+            "swp{}{} r{},r{},[r{}]",
+            self.condition, byte_suffix, self.destination, self.source, self.address
+        )
+    }
+}
+
 /// A software interrupt instruction (`swi`), which switches the CPU into
 /// Supervisor mode and sets the program counter to the software interrupt
 /// vector at address `8`.  This vector itself should be a branch instruction to
@@ -319,6 +364,7 @@ pub enum Instruction {
     BranchAndExchange(BranchAndExchange),
     Multiply(Multiply),
     MultiplyLong(MultiplyLong),
+    SingleDataSwap(SingleDataSwap),
     SoftwareInterrupt(SoftwareInterrupt),
 }
 
@@ -341,7 +387,7 @@ impl Instruction {
     pub fn decode(raw: RawInstruction) -> Option<Self> {
         let condition = Condition::from_u32(raw & 0xF000_0000)?;
         decode_pipeline!(
-            raw, condition => Branch, Multiply, MultiplyLong, BranchAndExchange, SoftwareInterrupt,
+            raw, condition => Branch, Multiply, MultiplyLong, BranchAndExchange, SingleDataSwap, SoftwareInterrupt,
         )
     }
 }
