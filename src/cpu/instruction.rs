@@ -206,6 +206,73 @@ impl fmt::Display for Multiply {
     }
 }
 
+/// A 64-bit multiply or multiply-accumulate operation, which multiplies the
+/// specified integer operands and optionally adds an extra 64-bit value to the
+/// result.  Unlike 32-bit multiplications, these instructions may perform
+/// either signed or unsigned multiplication, resulting in four distinct
+/// mnemonics: `umull`, `smull`, `umlal`, and `smlal`.
+#[derive(Debug, Eq, PartialEq)]
+pub struct MultiplyLong {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// Whether the multiplicands should be considered signed or unsigned.
+    pub signed: bool,
+    /// Whether the values of the destination registers combined into a 64-bit
+    /// value `(RdHi,RdLo)` should be added to the result of the multiplication.
+    pub accumulate: bool,
+    /// Whether the condition codes in the CPSR should be affected as a result
+    /// of this operation.
+    pub set_cpsr: bool,
+    /// The register `RdHi` in which the high 32 bits of the product should be
+    /// stored, and from which the high 32 bits of the addend will be sourced if
+    /// `accumulate` is `true`.
+    pub destination_high: RegisterNumber,
+    /// The register `RdLo` in which the low 32 bits of the product should be
+    /// stored, and from which the low 32 bits of the addend will be sourced if
+    /// `accumulate` is `true`.
+    pub destination_low: RegisterNumber,
+    /// The register `Rs` from which the first multiplicand should be sourced.
+    pub multiplicand1: RegisterNumber,
+    /// The register `Rm` from which the second multiplicand should be sourced.
+    pub multiplicand2: RegisterNumber,
+}
+
+impl InstructionType for MultiplyLong {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Self> {
+        ((raw & 0x0F80_00F0) == 0x0080_0090).then_some(Self {
+            condition,
+            signed: bit_is_set(raw, 22),
+            accumulate: bit_is_set(raw, 21),
+            set_cpsr: bit_is_set(raw, 20),
+            destination_high: select_bits(raw, 16, 4) as RegisterNumber,
+            destination_low: select_bits(raw, 12, 4) as RegisterNumber,
+            multiplicand1: select_bits(raw, 8, 4) as RegisterNumber,
+            multiplicand2: (raw & 0xF) as RegisterNumber,
+        })
+    }
+}
+
+impl fmt::Display for MultiplyLong {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let sign_prefix = if self.signed { "s" } else { "u" };
+        let mnemonic = if self.accumulate { "mlal" } else { "mull" };
+        let suffix = if self.set_cpsr { "s" } else { "" };
+
+        write!(
+            f,
+            "{}{}{}{} r{},r{},r{},r{}",
+            sign_prefix,
+            mnemonic,
+            self.condition,
+            suffix,
+            self.destination_low,
+            self.destination_high,
+            self.multiplicand2,
+            self.multiplicand1
+        )
+    }
+}
+
 /// A software interrupt instruction (`swi`), which switches the CPU into
 /// Supervisor mode and sets the program counter to the software interrupt
 /// vector at address `8`.  This vector itself should be a branch instruction to
@@ -251,6 +318,7 @@ pub enum Instruction {
     Branch(Branch),
     BranchAndExchange(BranchAndExchange),
     Multiply(Multiply),
+    MultiplyLong(MultiplyLong),
     SoftwareInterrupt(SoftwareInterrupt),
 }
 
@@ -273,7 +341,7 @@ impl Instruction {
     pub fn decode(raw: RawInstruction) -> Option<Self> {
         let condition = Condition::from_u32(raw & 0xF000_0000)?;
         decode_pipeline!(
-            raw, condition => Branch, Multiply, BranchAndExchange, SoftwareInterrupt,
+            raw, condition => Branch, Multiply, MultiplyLong, BranchAndExchange, SoftwareInterrupt,
         )
     }
 }

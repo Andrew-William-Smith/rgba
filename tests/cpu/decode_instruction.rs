@@ -77,6 +77,24 @@ fn multiply() {
 }
 
 #[test]
+fn multiply_long() {
+    decode_succeeds!(
+        MultiplyLong,
+        // Permutations of all control bits.
+        0xE0801392 => MultiplyLong { condition: Condition::Always, signed: false, accumulate: false, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umull r1,r0,r2,r3",
+        0xE0C01392 => MultiplyLong { condition: Condition::Always, signed: true, accumulate: false, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smull r1,r0,r2,r3",
+        0xE0A01392 => MultiplyLong { condition: Condition::Always, signed: false, accumulate: true, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umlal r1,r0,r2,r3",
+        0xE0E01392 => MultiplyLong { condition: Condition::Always, signed: true, accumulate: true, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smlal r1,r0,r2,r3",
+        0xE0901392 => MultiplyLong { condition: Condition::Always, signed: false, accumulate: false, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umulls r1,r0,r2,r3",
+        0xE0D01392 => MultiplyLong { condition: Condition::Always, signed: true, accumulate: false, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smulls r1,r0,r2,r3",
+        0xE0B01392 => MultiplyLong { condition: Condition::Always, signed: false, accumulate: true, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umlals r1,r0,r2,r3",
+        0xE0F01392 => MultiplyLong { condition: Condition::Always, signed: true, accumulate: true, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smlals r1,r0,r2,r3",
+        // With a different condition code, since these mnemonics are becoming alarmingly long.
+        0x00F9A190 => MultiplyLong { condition: Condition::Equal, signed: true, accumulate: true, set_cpsr: true, destination_high: 9, destination_low: 10, multiplicand1: 1, multiplicand2: 0 } => "smlaleqs r10,r9,r0,r1",
+    );
+}
+
+#[test]
 fn software_interrupt() {
     decode_succeeds!(
         SoftwareInterrupt,
