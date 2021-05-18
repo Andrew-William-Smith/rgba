@@ -40,14 +40,14 @@ fn branches() {
     decode_succeeds!(
         Branch,
         // Branch without link, forward and backward offsets.
-        0xEA000000 => Branch { condition: Condition::Always, link: false, offset: 0 } => "b #+0",
-        0x1A000000 => Branch { condition: Condition::NotEqual, link: false, offset: 0 } => "bne #+0",
-        0xEA00CAFE => Branch { condition: Condition::Always, link: false, offset: 207_864 } => "b #+207864",
-        0x6AF0000F => Branch { condition: Condition::Overflow, link: false, offset: -4_194_244 } => "bvs #-4194244",
+        0xEA000000 => Branch { condition: Always, link: false, offset: 0 } => "b #+0",
+        0x1A000000 => Branch { condition: NotEqual, link: false, offset: 0 } => "bne #+0",
+        0xEA00CAFE => Branch { condition: Always, link: false, offset: 207_864 } => "b #+207864",
+        0x6AF0000F => Branch { condition: Overflow, link: false, offset: -4_194_244 } => "bvs #-4194244",
         // Branch with link.
-        0xEB000000 => Branch { condition: Condition::Always, link: true, offset: 0 } => "bl #+0",
-        0x0B00BEEF => Branch { condition: Condition::Equal, link: true, offset: 195_516 } => "bleq #+195516",
-        0x3B808080 => Branch { condition: Condition::Lower, link: true, offset: -33_422_848 } => "blcc #-33422848",
+        0xEB000000 => Branch { condition: Always, link: true, offset: 0 } => "bl #+0",
+        0x0B00BEEF => Branch { condition: Equal, link: true, offset: 195_516 } => "bleq #+195516",
+        0x3B808080 => Branch { condition: Lower, link: true, offset: -33_422_848 } => "blcc #-33422848",
     );
 }
 
@@ -55,9 +55,9 @@ fn branches() {
 fn branch_and_exchange() {
     decode_succeeds!(
         BranchAndExchange,
-        0xE12FFF10 => BranchAndExchange { condition: Condition::Always, source: 0 } => "bx r0",
-        0x212FFF17 => BranchAndExchange { condition: Condition::HigherOrSame, source: 7 } => "bxcs r7",
-        0xD12FFF1A => BranchAndExchange { condition: Condition::LessOrEqual, source: 10 } => "bxle r10",
+        0xE12FFF10 => BranchAndExchange { condition: Always, source: 0 } => "bx r0",
+        0x212FFF17 => BranchAndExchange { condition: HigherOrSame, source: 7 } => "bxcs r7",
+        0xD12FFF1A => BranchAndExchange { condition: LessOrEqual, source: 10 } => "bxle r10",
     );
 }
 
@@ -150,13 +150,13 @@ fn multiply() {
     decode_succeeds!(
         Multiply,
         // Permutations of accumulate and condition code control bits.
-        0xE0000192 => Multiply { condition: Condition::Always, accumulate: false, set_cpsr: false, destination: 0, addend: 0, multiplicand1: 1, multiplicand2: 2 } => "mul r0,r2,r1",
-        0xE0100192 => Multiply { condition: Condition::Always, accumulate: false, set_cpsr: true, destination: 0, addend: 0, multiplicand1: 1, multiplicand2: 2 } => "muls r0,r2,r1",
-        0xE0201293 => Multiply { condition: Condition::Always, accumulate: true, set_cpsr: false, destination: 0, addend: 1, multiplicand1: 2, multiplicand2: 3 } => "mla r0,r3,r2,r1",
-        0xE0301293 => Multiply { condition: Condition::Always, accumulate: true, set_cpsr: true, destination: 0, addend: 1, multiplicand1: 2, multiplicand2: 3 } => "mlas r0,r3,r2,r1",
+        0xE0000192 => Multiply { condition: Always, accumulate: false, set_cpsr: false, destination: 0, addend: 0, multiplicand1: 1, multiplicand2: 2 } => "mul r0,r2,r1",
+        0xE0100192 => Multiply { condition: Always, accumulate: false, set_cpsr: true, destination: 0, addend: 0, multiplicand1: 1, multiplicand2: 2 } => "muls r0,r2,r1",
+        0xE0201293 => Multiply { condition: Always, accumulate: true, set_cpsr: false, destination: 0, addend: 1, multiplicand1: 2, multiplicand2: 3 } => "mla r0,r3,r2,r1",
+        0xE0301293 => Multiply { condition: Always, accumulate: true, set_cpsr: true, destination: 0, addend: 1, multiplicand1: 2, multiplicand2: 3 } => "mlas r0,r3,r2,r1",
         // With some different condition codes.
-        0x00314392 => Multiply { condition: Condition::Equal, accumulate: true, set_cpsr: true, destination: 1, addend: 4, multiplicand1: 3, multiplicand2: 2 } => "mlaeqs r1,r2,r3,r4",
-        0xA0130192 => Multiply { condition: Condition::GreaterOrEqual, accumulate: false, set_cpsr: true, destination: 3, addend: 0, multiplicand1: 1, multiplicand2: 2 } => "mulges r3,r2,r1",
+        0x00314392 => Multiply { condition: Equal, accumulate: true, set_cpsr: true, destination: 1, addend: 4, multiplicand1: 3, multiplicand2: 2 } => "mlaeqs r1,r2,r3,r4",
+        0xA0130192 => Multiply { condition: GreaterOrEqual, accumulate: false, set_cpsr: true, destination: 3, addend: 0, multiplicand1: 1, multiplicand2: 2 } => "mulges r3,r2,r1",
     );
 }
 
@@ -165,16 +165,16 @@ fn multiply_long() {
     decode_succeeds!(
         MultiplyLong,
         // Permutations of all control bits.
-        0xE0801392 => MultiplyLong { condition: Condition::Always, signed: false, accumulate: false, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umull r1,r0,r2,r3",
-        0xE0C01392 => MultiplyLong { condition: Condition::Always, signed: true, accumulate: false, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smull r1,r0,r2,r3",
-        0xE0A01392 => MultiplyLong { condition: Condition::Always, signed: false, accumulate: true, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umlal r1,r0,r2,r3",
-        0xE0E01392 => MultiplyLong { condition: Condition::Always, signed: true, accumulate: true, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smlal r1,r0,r2,r3",
-        0xE0901392 => MultiplyLong { condition: Condition::Always, signed: false, accumulate: false, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umulls r1,r0,r2,r3",
-        0xE0D01392 => MultiplyLong { condition: Condition::Always, signed: true, accumulate: false, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smulls r1,r0,r2,r3",
-        0xE0B01392 => MultiplyLong { condition: Condition::Always, signed: false, accumulate: true, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umlals r1,r0,r2,r3",
-        0xE0F01392 => MultiplyLong { condition: Condition::Always, signed: true, accumulate: true, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smlals r1,r0,r2,r3",
+        0xE0801392 => MultiplyLong { condition: Always, signed: false, accumulate: false, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umull r1,r0,r2,r3",
+        0xE0C01392 => MultiplyLong { condition: Always, signed: true, accumulate: false, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smull r1,r0,r2,r3",
+        0xE0A01392 => MultiplyLong { condition: Always, signed: false, accumulate: true, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umlal r1,r0,r2,r3",
+        0xE0E01392 => MultiplyLong { condition: Always, signed: true, accumulate: true, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smlal r1,r0,r2,r3",
+        0xE0901392 => MultiplyLong { condition: Always, signed: false, accumulate: false, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umulls r1,r0,r2,r3",
+        0xE0D01392 => MultiplyLong { condition: Always, signed: true, accumulate: false, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smulls r1,r0,r2,r3",
+        0xE0B01392 => MultiplyLong { condition: Always, signed: false, accumulate: true, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umlals r1,r0,r2,r3",
+        0xE0F01392 => MultiplyLong { condition: Always, signed: true, accumulate: true, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smlals r1,r0,r2,r3",
         // With a different condition code, since these mnemonics are becoming alarmingly long.
-        0x00F9A190 => MultiplyLong { condition: Condition::Equal, signed: true, accumulate: true, set_cpsr: true, destination_high: 9, destination_low: 10, multiplicand1: 1, multiplicand2: 0 } => "smlaleqs r10,r9,r0,r1",
+        0x00F9A190 => MultiplyLong { condition: Equal, signed: true, accumulate: true, set_cpsr: true, destination_high: 9, destination_low: 10, multiplicand1: 1, multiplicand2: 0 } => "smlaleqs r10,r9,r0,r1",
     );
 }
 
@@ -182,9 +182,9 @@ fn multiply_long() {
 fn single_data_swap() {
     decode_succeeds!(
         SingleDataSwap,
-        0xE1020091 => SingleDataSwap { condition: Condition::Always, swap_byte: false, address: 2, destination: 0, source: 1 } => "swp r0,r1,[r2]",
-        0xE1420091 => SingleDataSwap { condition: Condition::Always, swap_byte: true, address: 2, destination: 0, source: 1 } => "swpb r0,r1,[r2]",
-        0x314AC09B => SingleDataSwap { condition: Condition::Lower, swap_byte: true, address: 10, destination: 12, source: 11 } => "swpccb r12,r11,[r10]",
+        0xE1020091 => SingleDataSwap { condition: Always, swap_byte: false, address: 2, destination: 0, source: 1 } => "swp r0,r1,[r2]",
+        0xE1420091 => SingleDataSwap { condition: Always, swap_byte: true, address: 2, destination: 0, source: 1 } => "swpb r0,r1,[r2]",
+        0x314AC09B => SingleDataSwap { condition: Lower, swap_byte: true, address: 10, destination: 12, source: 11 } => "swpccb r12,r11,[r10]",
     );
 }
 
@@ -192,8 +192,8 @@ fn single_data_swap() {
 fn software_interrupt() {
     decode_succeeds!(
         SoftwareInterrupt,
-        0xEF000000 => SoftwareInterrupt { condition: Condition::Always, comment: 0 } => "swi #0x0",
-        0x1F00CAFE => SoftwareInterrupt { condition: Condition::NotEqual, comment: 0xCAFE } => "swine #0xCAFE",
-        0xBF123456 => SoftwareInterrupt { condition: Condition::Less, comment: 0x123456 } => "swilt #0x123456",
+        0xEF000000 => SoftwareInterrupt { condition: Always, comment: 0 } => "swi #0x0",
+        0x1F00CAFE => SoftwareInterrupt { condition: NotEqual, comment: 0xCAFE } => "swine #0xCAFE",
+        0xBF123456 => SoftwareInterrupt { condition: Less, comment: 0x123456 } => "swilt #0x123456",
     );
 }

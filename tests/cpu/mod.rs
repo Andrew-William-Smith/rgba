@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 mod decode_instruction;
 
 /// A simple macro to assert that the decoding of a number of raw instructions
@@ -6,6 +8,7 @@ mod decode_instruction;
 macro_rules! decode_succeeds {
     ($type:ident, $($bytecode:literal => $decoded:expr => $disassembly:expr),+$(,)?) => {
         $(
+            use Condition::*;
             let result = Instruction::decode($bytecode);
             match result {
                 Some(Instruction::$type(inst)) => {
