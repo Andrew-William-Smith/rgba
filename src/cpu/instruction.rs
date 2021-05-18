@@ -185,15 +185,27 @@ pub enum Instruction {
     SoftwareInterrupt(SoftwareInterrupt),
 }
 
+/// Define the sequence in which instruction types should be decoded.  The
+/// specified types are evaluated in sequence, with the first successful
+/// decoding being returned.  The raw instruction and condition are the same for
+/// all instructions.
+macro_rules! decode_pipeline {
+    ($raw:ident, $condition:ident => $first:ident, $($other:ident),+$(,)?) => {
+        $first::decode($raw, $condition).map(Self::$first)
+        $(
+            .or_else(|| $other::decode($raw, $condition).map(Self::$other))
+        )+
+    }
+}
+
 impl Instruction {
     /// Decode the specified instruction, if it can be decoded.  If the
     /// instruction is not valid, `None` will be returned.
     pub fn decode(raw: RawInstruction) -> Option<Self> {
         let condition = Condition::from_u32(raw & 0xF000_0000)?;
-        Branch::decode(raw, condition)
-            .map(Self::Branch)
-            .or_else(|| BranchAndExchange::decode(raw, condition).map(Self::BranchAndExchange))
-            .or_else(|| SoftwareInterrupt::decode(raw, condition).map(Self::SoftwareInterrupt))
+        decode_pipeline!(
+            raw, condition => Branch, BranchAndExchange, SoftwareInterrupt,
+        )
     }
 }
 
