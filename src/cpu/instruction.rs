@@ -376,6 +376,83 @@ impl InstructionType for MultiplyLong {
     }
 }
 
+/// A specialised operation to transfer the value stored in either CPSR or the
+/// current mode's SPSR to a register.  This instruction corresponds to the
+/// mnemonic `mrs`.
+#[derive(Debug, Eq, PartialEq)]
+pub struct PsrRegisterTransfer {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// Whether to transfer the CPSR (`false`) or current mode's SPSR (`true`)
+    /// to the destination register.
+    pub use_spsr: bool,
+    /// The register into which to transfer the specified PSR.
+    pub destination: RegisterNumber,
+}
+
+impl InstructionType for PsrRegisterTransfer {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Self> {
+        ((raw & 0x0FBF_0FFF) == 0x010F_0000).then_some(Self {
+            condition,
+            use_spsr: bit_is_set(raw, 22),
+            destination: select_bits(raw, 12, 4) as RegisterNumber,
+        })
+    }
+}
+
+/// A specialised operation to transfer the value stored in a register to either
+/// the CPSR or the current mode's SPSR.  Either the entire register or only the
+/// flag bits can be transferred; this instruction corresponds to the mnemonic
+/// `msr`.
+#[derive(Debug, Eq, PartialEq)]
+pub struct RegisterPsrTransfer {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// Whether to transfer the source value to the CPSR (`false`) or the
+    /// current mode's SPSR (`true`).
+    pub use_spsr: bool,
+    /// Whether to transfer the value to the entirety of the PSR (`false`) or
+    /// only the flag bits (`true`).
+    pub flags_only: bool,
+    /// The location from which the new PSR value should be sourced.  When
+    /// transferring to the entire PSR, this may only be a register; when
+    /// transferring only the flag bits, it may be either a register or an
+    /// immediate value.
+    pub source: DataOperand,
+}
+
+impl InstructionType for RegisterPsrTransfer {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Self> {
+        let use_spsr = bit_is_set(raw, 22);
+        ((raw & 0x0FBF_FFF0) == 0x0129_F000)
+            .then_some(Self {
+                condition,
+                use_spsr,
+                flags_only: false,
+                source: DataOperand::ShiftImmediate(
+                    ShiftType::LogicalShiftLeft,
+                    0,
+                    (raw & 0xF) as RegisterNumber,
+                ),
+            })
+            .or_else(|| {
+                ((raw & 0x0DBF_F000) == 0x0128_F000).then_some(Self {
+                    condition,
+                    use_spsr,
+                    flags_only: true,
+                    source: if bit_is_set(raw, 25) {
+                        DataOperand::decode_immediate(raw)
+                    } else if select_bits(raw, 4, 8) == 0 {
+                        DataOperand::decode_register(raw)
+                    } else {
+                        // The register cannot have a shift applied, so raise that this instruction was invalid.
+                        None?
+                    },
+                })
+            })
+    }
+}
+
 /// An atomic data swap of either an entire word or a single byte.  On
 /// multiprocessor systems, the bus is locked for the entire duration of this
 /// instruction; however, on the uniprocessor GBA, this instruction is exactly
@@ -451,6 +528,8 @@ pub enum Instruction {
     DataProcessing(DataProcessing),
     Multiply(Multiply),
     MultiplyLong(MultiplyLong),
+    PsrRegisterTransfer(PsrRegisterTransfer),
+    RegisterPsrTransfer(RegisterPsrTransfer),
     SingleDataSwap(SingleDataSwap),
     SoftwareInterrupt(SoftwareInterrupt),
 }
@@ -480,6 +559,8 @@ impl Instruction {
             MultiplyLong,
             BranchAndExchange,
             SingleDataSwap,
+            PsrRegisterTransfer,
+            RegisterPsrTransfer,
             DataProcessing,
             SoftwareInterrupt,
         )

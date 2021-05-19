@@ -136,6 +136,29 @@ impl fmt::Display for instruction::MultiplyLong {
     }
 }
 
+impl fmt::Display for instruction::PsrRegisterTransfer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let psr_name = if self.use_spsr { "spsr" } else { "cpsr" };
+        write!(
+            f,
+            "mrs{} r{},{}",
+            self.condition, self.destination, psr_name
+        )
+    }
+}
+
+impl fmt::Display for instruction::RegisterPsrTransfer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let psr_name = if self.use_spsr { "spsr" } else { "cpsr" };
+        let flag_suffix = if self.flags_only { "_flg" } else { "" };
+        write!(
+            f,
+            "msr{} {}{},{}",
+            self.condition, psr_name, flag_suffix, self.source
+        )
+    }
+}
+
 impl fmt::Display for instruction::SingleDataSwap {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let byte_suffix = if self.swap_byte { "b" } else { "" };

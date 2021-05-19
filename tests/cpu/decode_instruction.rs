@@ -178,6 +178,34 @@ fn multiply_long() {
 }
 
 #[test]
+fn psr_to_register_transfer() {
+    decode_succeeds!(
+        PsrRegisterTransfer,
+        0xE10F1000 => PsrRegisterTransfer { condition: Always, use_spsr: false, destination: 1 } => "mrs r1,cpsr",
+        0xE14F1000 => PsrRegisterTransfer { condition: Always, use_spsr: true, destination: 1 } => "mrs r1,spsr",
+        0x614FC000 => PsrRegisterTransfer { condition: Overflow, use_spsr: true, destination: 12 } => "mrsvs r12,spsr",
+    );
+}
+
+#[test]
+fn register_to_psr_transfer() {
+    use DataOperand::*;
+    use ShiftType::*;
+
+    decode_succeeds!(
+        RegisterPsrTransfer,
+        // Permutations of control bits, register operand.
+        0xE129F004 => RegisterPsrTransfer { condition: Always, use_spsr: false, flags_only: false, source: ShiftImmediate(LogicalShiftLeft, 0, 4) } => "msr cpsr,r4",
+        0xE169F004 => RegisterPsrTransfer { condition: Always, use_spsr: true, flags_only: false, source: ShiftImmediate(LogicalShiftLeft, 0, 4) } => "msr spsr,r4",
+        0xE128F004 => RegisterPsrTransfer { condition: Always, use_spsr: false, flags_only: true, source: ShiftImmediate(LogicalShiftLeft, 0, 4) } => "msr cpsr_flg,r4",
+        0xE168F004 => RegisterPsrTransfer { condition: Always, use_spsr: true, flags_only: true, source: ShiftImmediate(LogicalShiftLeft, 0, 4) } => "msr spsr_flg,r4",
+        // Immediate operands for flag transfer.
+        0xE328FC0F => RegisterPsrTransfer { condition: Always, use_spsr: false, flags_only: true, source: Immediate(0xF00) } => "msr cpsr_flg,#0xF00",
+        0x4368FC0F => RegisterPsrTransfer { condition: Negative, use_spsr: true, flags_only: true, source: Immediate(0xF00) } => "msrmi spsr_flg,#0xF00",
+    );
+}
+
+#[test]
 fn single_data_swap() {
     decode_succeeds!(
         SingleDataSwap,
