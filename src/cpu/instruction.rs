@@ -167,7 +167,8 @@ pub enum DataOperand {
 impl DataOperand {
     /// Decode an immediate data operand in the low 12 bits of the specified
     /// `spec`ification, as described for the `Immediate` variant.
-    pub fn decode_immediate(spec: u32) -> Self {
+    #[must_use]
+    fn decode_immediate(spec: u32) -> Self {
         let value = spec & 0xFF;
         let rotation = select_bits(spec, 8, 4) * 2;
         Self::Immediate(value.rotate_right(rotation))
@@ -181,7 +182,8 @@ impl DataOperand {
     /// May panic if the number of variants of `ShiftType` is reduced; however,
     /// this panic should not occur provided that the 4 variants defined by the
     /// ARM documentation are retained.
-    pub fn decode_register(spec: u32) -> Self {
+    #[must_use]
+    fn decode_register(spec: u32) -> Self {
         let source_register = (spec & 0xF) as RegisterNumber;
         let shift_type = ShiftType::from_u32(select_bits(spec, 5, 2)).unwrap();
 
@@ -552,6 +554,7 @@ include!(concat!(env!("OUT_DIR"), "/codegen_decode_tables.rs"));
 impl Instruction {
     /// Decode the specified instruction, if it can be decoded.  If the
     /// instruction is not valid, `None` will be returned.
+    #[must_use]
     pub fn decode(raw: RawInstruction) -> Option<Self> {
         let condition = Condition::from_u32(raw >> 28)?;
         // Look up this instruction in the instruction type tables.
