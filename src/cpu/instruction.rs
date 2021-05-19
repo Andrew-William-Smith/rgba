@@ -402,8 +402,9 @@ impl InstructionType for PsrRegisterTransfer {
 
 /// A specialised operation to transfer the value stored in a register to either
 /// the CPSR or the current mode's SPSR.  Either the entire register or only the
-/// flag bits can be transferred; this instruction corresponds to the mnemonic
-/// `msr`.
+/// flag bits can be transferred; in User mode, both variants perform the same
+/// operation since only the flags are writable in that mode.  This instruction
+/// corresponds to the mnemonic `msr`.
 #[derive(Debug, Eq, PartialEq)]
 pub struct RegisterPsrTransfer {
     /// The condition upon which this instruction will be executed.
