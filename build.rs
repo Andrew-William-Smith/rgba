@@ -49,7 +49,7 @@ const DECODE_L1_TABLE_SIZE: usize = DECODE_ENTRIES / DECODE_L1_CHUNK_SIZE;
 fn build_decode_tables() -> Result<(), Box<dyn Error>> {
     // Determine the instruction type for each bit sequence.
     let mut instruction_types = [0; DECODE_ENTRIES];
-    for sequence in 0..DECODE_ENTRIES {
+    for (sequence, entry) in instruction_types.iter_mut().enumerate() {
         // Scan through the encoding select masks to find the last one that applies.
         let mut encoding = 0;
         ENCODING_SELECT
@@ -60,7 +60,7 @@ fn build_decode_tables() -> Result<(), Box<dyn Error>> {
                     encoding = idx;
                 }
             });
-        instruction_types[sequence] = encoding;
+        *entry = encoding;
     }
 
     // Partition flat array into two segments depending upon the high 8 bits.
