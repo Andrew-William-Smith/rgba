@@ -1,3 +1,4 @@
+pub mod disassembly;
 pub mod instruction;
 
 /// A memory address, denoting a pointer into the system's memory.
