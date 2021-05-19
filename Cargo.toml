@@ -1,7 +1,9 @@
 [package]
 name = "rgba"
+description = "A Game Boy Advance emulator written in Rust."
 version = "0.1.0"
 authors = ["Andrew-William-Smith <aws@awsmith.us>"]
+license-file = "LICENSE"
 edition = "2018"
 
 [dependencies]

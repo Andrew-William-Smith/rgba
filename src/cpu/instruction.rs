@@ -6,20 +6,20 @@ use std::fmt;
 
 /// Determine whether the bit at the specified `index`, counted from the least
 /// significant bit, is set in the specified `value`.
-fn bit_is_set(value: u32, index: u8) -> bool {
+const fn bit_is_set(value: u32, index: u8) -> bool {
     value & (1 << index) != 0
 }
 
 /// Select the specified number of bits (`size`) beginning at the specified
 /// `low_bit` index in the specified `value`.  The resulting value will feature
 /// the low bit shifted into index `0`.
-fn select_bits(value: u32, low_bit: u8, size: u8) -> u32 {
+const fn select_bits(value: u32, low_bit: u8, size: u8) -> u32 {
     (value >> low_bit) & ((1 << size) - 1)
 }
 
 /// Extend the value of the bit in the specified `sign_bit` of the specified
 /// `value` through all bits above the sign bit.
-fn sign_extend(value: u32, sign_bit: u8) -> i32 {
+const fn sign_extend(value: u32, sign_bit: u8) -> i32 {
     let shift = 31 - sign_bit;
     ((value as i32) << shift) >> shift
 }
@@ -176,6 +176,11 @@ impl DataOperand {
     /// Decode a register data operand in the low 12 bits of the specified
     /// `spec`ification, as described for the `ShiftImmediate` and
     /// `ShiftRegister` variants.
+    ///
+    /// # Panics
+    /// May panic if the number of variants of `ShiftType` is reduced; however,
+    /// this panic should not occur provided that the 4 variants defined by the
+    /// ARM documentation are retained.
     pub fn decode_register(spec: u32) -> Self {
         let source_register = (spec & 0xF) as RegisterNumber;
         let shift_type = ShiftType::from_u32(select_bits(spec, 5, 2)).unwrap();
