@@ -9,13 +9,14 @@ macro_rules! decode_succeeds {
     ($type:ident, $($bytecode:literal => $decoded:expr => $disassembly:expr),+$(,)?) => {
         $(
             use Condition::*;
-            let result = Instruction::decode($bytecode);
+            let bytecode: u32 = $bytecode;
+            let result = Instruction::decode(bytecode);
             match result {
                 Some(Instruction::$type(inst)) => {
                     assert_eq!(inst, $decoded);
                     assert_eq!(inst.to_string(), $disassembly);
                 }
-                Some(_) => panic!("Instruction decoded to wrong type!"),
+                Some(inst) => panic!("Instruction decoded to wrong type!  {:#X} => {}", bytecode, inst),
                 None => panic!("Instruction failed to decode!"),
             };
         )+
