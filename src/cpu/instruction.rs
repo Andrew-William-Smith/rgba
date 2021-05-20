@@ -24,6 +24,14 @@ const fn sign_extend(value: u32, sign_bit: u8) -> i32 {
     ((value as i32) << shift) >> shift
 }
 
+/// "Decode" an instruction that falls into a documented gap in the encoding
+/// space.  Note that this function should *not* be used to return any invalid
+/// instruction, only those that are explicitly designated to be undefined by
+/// the ISA.
+const fn decode_undefined(_raw: RawInstruction, _condition: Condition) -> Option<Instruction> {
+    None
+}
+
 /// The type of an instruction upon being fetched from memory.  Raw instructions
 /// are converted to `Instruction`s in the Decode stage.
 pub type RawInstruction = u32;
