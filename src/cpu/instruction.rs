@@ -207,6 +207,50 @@ impl DataOperand {
     }
 }
 
+/// A collection of instruction fields that are common to all data transfer
+/// instructions.  These fields control the addressing mode and type of
+/// operation performed for each instruction.
+#[derive(Debug, Eq, PartialEq)]
+pub struct DataTransferOptions {
+    /// Whether the offset should be added to the base address before
+    /// (pre-indexing, `true`) or after (post-indexing, `false`) the memory
+    /// transfer is performed.
+    pub pre_index: bool,
+    /// Whether the offset should be added to (`true`) or subtracted from
+    /// (`false`) the value of the base register.
+    pub add_offset: bool,
+    /// Whether the computed address should be written back to the base address
+    /// register once the memory transfer is complete.  For post-indexed
+    /// addresses, this value should only be `true` if the CPU is running in a
+    /// privileged mode; in this environment, setting the write-back bit high
+    /// will result in the transfer being performed in User mode.  Since the GBA
+    /// does not feature memory protection or address translation, this
+    /// mode-switching functionality is irrelevant to us.
+    pub write_back: bool,
+    /// Whether we should read a value from memory (load, `true`) or write a
+    /// value out to memory (store, `false`).
+    pub load: bool,
+    /// The register from which to source the base address before the offset is
+    /// applied.  If write-back is requested, this register will contain the
+    /// offset address after the memory operation is performed.
+    pub base: RegisterNumber,
+}
+
+impl DataTransferOptions {
+    /// Decode the common components of a data transfer operation.  No
+    /// error checking is performed upon these values, so it is the
+    /// responsibility of the caller to handle all validation.
+    fn decode(spec: u32) -> Self {
+        Self {
+            pre_index: bit_is_set(spec, 24),
+            add_offset: bit_is_set(spec, 23),
+            write_back: bit_is_set(spec, 21),
+            load: bit_is_set(spec, 20),
+            base: select_bits(spec, 16, 4) as RegisterNumber,
+        }
+    }
+}
+
 /// A specific type of ARM instruction with a unique encoding scheme.
 pub trait InstructionType: fmt::Display + Sized {
     /// Decode the specified instruction to be executed only upon the specified
@@ -518,31 +562,12 @@ impl InstructionType for SingleDataSwap {
 pub struct SingleDataTransfer {
     /// The condition upon which this instruction will be executed.
     pub condition: Condition,
-    /// Whether the offset should be added to the base address before
-    /// (pre-indexing, `true`) or after (post-indexing, `false`) the memory
-    /// transfer is performed.
-    pub pre_index: bool,
-    /// Whether the offset should be added to (`true`) or subtracted from
-    /// (`false`) the value of the base register.
-    pub add_offset: bool,
     /// Whether to transfer only a byte (`true`) or an entire 32-bit word
     /// (`false`) to/from memory.
     pub transfer_byte: bool,
-    /// Whether the computed address should be written back to the base address
-    /// register once the memory transfer is complete.  For post-indexed
-    /// addresses, this value should only be `true` if the CPU is running in a
-    /// privileged mode; in this environment, setting the write-back bit high
-    /// will result in the transfer being performed in User mode.  Since the GBA
-    /// does not feature memory protection or address translation, this
-    /// mode-switching functionality is irrelevant to us.
-    pub write_back: bool,
-    /// Whether we should read a value from memory (load, `true`) or write a
-    /// value out to memory (store, `false`).
-    pub load: bool,
-    /// The register from which to source the base address before the offset is
-    /// applied.  If write-back is requested, this register will contain the
-    /// offset address after the memory operation is performed.
-    pub base: RegisterNumber,
+    /// Options set for this instruction that are common to all memory transfer
+    /// operations.
+    pub opt: DataTransferOptions,
     /// Either the register from which to source the value to write for a store
     /// or into which to read the value of a load, depending on the type of
     /// operation being performed.
@@ -559,12 +584,8 @@ impl InstructionType for SingleDataTransfer {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
         Some(Instruction::SingleDataTransfer(Self {
             condition,
-            pre_index: bit_is_set(raw, 24),
-            add_offset: bit_is_set(raw, 23),
             transfer_byte: bit_is_set(raw, 22),
-            write_back: bit_is_set(raw, 21),
-            load: bit_is_set(raw, 20),
-            base: select_bits(raw, 16, 4) as RegisterNumber,
+            opt: DataTransferOptions::decode(raw),
             target: select_bits(raw, 12, 4) as RegisterNumber,
             offset: if bit_is_set(raw, 25) {
                 // Only immediate shifts are supported by this instruction.

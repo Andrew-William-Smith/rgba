@@ -183,26 +183,26 @@ impl fmt::Display for instruction::SingleDataSwap {
 
 impl fmt::Display for instruction::SingleDataTransfer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mnemonic = if self.load { "ldr" } else { "str" };
+        let mnemonic = if self.opt.load { "ldr" } else { "str" };
         let byte_suffix = optional_field(self.transfer_byte, "b");
-        let user_suffix = optional_field(!self.pre_index && self.write_back, "t");
-        let write_suffix = optional_field(self.write_back, "!");
-        let offset_sign = if self.add_offset { "+" } else { "-" };
+        let user_suffix = optional_field(!self.opt.pre_index && self.opt.write_back, "t");
+        let write_suffix = optional_field(self.opt.write_back, "!");
+        let offset_sign = if self.opt.add_offset { "+" } else { "-" };
 
         let address = match &self.offset {
-            DataOperand::Immediate(0) => format!("[r{}]", self.base),
-            DataOperand::Immediate(offset) if self.pre_index => format!(
+            DataOperand::Immediate(0) => format!("[r{}]", self.opt.base),
+            DataOperand::Immediate(offset) if self.opt.pre_index => format!(
                 "[r{},#{}{:#X}]{}",
-                self.base, offset_sign, offset, write_suffix
+                self.opt.base, offset_sign, offset, write_suffix
             ),
-            shift_operand if self.pre_index => format!(
+            shift_operand if self.opt.pre_index => format!(
                 "[r{},{}{}]{}",
-                self.base, offset_sign, shift_operand, write_suffix
+                self.opt.base, offset_sign, shift_operand, write_suffix
             ),
             DataOperand::Immediate(offset) => {
-                format!("[r{}],#{}{:#X}", self.base, offset_sign, offset)
+                format!("[r{}],#{}{:#X}", self.opt.base, offset_sign, offset)
             }
-            shift_operand => format!("[r{}],{}{}", self.base, offset_sign, shift_operand),
+            shift_operand => format!("[r{}],{}{}", self.opt.base, offset_sign, shift_operand),
         };
 
         write!(
