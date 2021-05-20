@@ -202,8 +202,9 @@ impl DataOperand {
 /// A specific type of ARM instruction with a unique encoding scheme.
 pub trait InstructionType: fmt::Display + Sized {
     /// Decode the specified instruction to be executed only upon the specified
-    /// condition, returning a variant of the decoded `Instruction` type.
-    fn decode(raw: RawInstruction, condition: Condition) -> Instruction;
+    /// condition, returning a variant of the decoded `Instruction` type.  If
+    /// the instruction could not be decoded, `None` is returned.
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction>;
 }
 
 /// A branch instruction, which sets the program counter to an address offset
@@ -223,14 +224,14 @@ pub struct Branch {
 }
 
 impl InstructionType for Branch {
-    fn decode(raw: RawInstruction, condition: Condition) -> Instruction {
-        Instruction::Branch(Self {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        Some(Instruction::Branch(Self {
             condition,
             // If bit 24 is set, this is a Branch with Link (bl).
             link: bit_is_set(raw, 24),
             // 24-bit offset must be shifted 2 bits to the right.
             offset: sign_extend(raw << 2, 25),
-        })
+        }))
     }
 }
 
@@ -249,12 +250,12 @@ pub struct BranchAndExchange {
 }
 
 impl InstructionType for BranchAndExchange {
-    fn decode(raw: RawInstruction, condition: Condition) -> Instruction {
-        Instruction::BranchAndExchange(Self {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        Some(Instruction::BranchAndExchange(Self {
             condition,
             // The register number is encoded in the low nybble of the instruction.
             source: (raw & 0xF) as RegisterNumber,
-        })
+        }))
     }
 }
 
@@ -281,10 +282,10 @@ pub struct DataProcessing {
 }
 
 impl InstructionType for DataProcessing {
-    fn decode(raw: RawInstruction, condition: Condition) -> Instruction {
-        Instruction::DataProcessing(Self {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        Some(Instruction::DataProcessing(Self {
             condition,
-            operation: ArithmeticOperation::from_u32(select_bits(raw, 21, 4)).unwrap(),
+            operation: ArithmeticOperation::from_u32(select_bits(raw, 21, 4))?,
             set_cpsr: bit_is_set(raw, 20),
             operand1: select_bits(raw, 16, 4) as RegisterNumber,
             destination: select_bits(raw, 12, 4) as RegisterNumber,
@@ -293,7 +294,7 @@ impl InstructionType for DataProcessing {
             } else {
                 DataOperand::decode_register(raw)
             },
-        })
+        }))
     }
 }
 
@@ -323,8 +324,8 @@ pub struct Multiply {
 }
 
 impl InstructionType for Multiply {
-    fn decode(raw: RawInstruction, condition: Condition) -> Instruction {
-        Instruction::Multiply(Self {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        Some(Instruction::Multiply(Self {
             condition,
             accumulate: bit_is_set(raw, 21),
             set_cpsr: bit_is_set(raw, 20),
@@ -332,7 +333,7 @@ impl InstructionType for Multiply {
             addend: select_bits(raw, 12, 4) as RegisterNumber,
             multiplicand1: select_bits(raw, 8, 4) as RegisterNumber,
             multiplicand2: (raw & 0xF) as RegisterNumber,
-        })
+        }))
     }
 }
 
@@ -368,8 +369,8 @@ pub struct MultiplyLong {
 }
 
 impl InstructionType for MultiplyLong {
-    fn decode(raw: RawInstruction, condition: Condition) -> Instruction {
-        Instruction::MultiplyLong(Self {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        Some(Instruction::MultiplyLong(Self {
             condition,
             signed: bit_is_set(raw, 22),
             accumulate: bit_is_set(raw, 21),
@@ -378,7 +379,7 @@ impl InstructionType for MultiplyLong {
             destination_low: select_bits(raw, 12, 4) as RegisterNumber,
             multiplicand1: select_bits(raw, 8, 4) as RegisterNumber,
             multiplicand2: (raw & 0xF) as RegisterNumber,
-        })
+        }))
     }
 }
 
@@ -397,17 +398,15 @@ pub struct PsrRegisterTransfer {
 }
 
 impl InstructionType for PsrRegisterTransfer {
-    fn decode(raw: RawInstruction, condition: Condition) -> Instruction {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
         // This instruction type overlaps with data processing in non-tabled bits.
-        if (raw & 0x0FBF_0FFF) == 0x010F_0000 {
-            Instruction::PsrRegisterTransfer(Self {
+        ((raw & 0x0FBF_0FFF) == 0x010F_0000)
+            .then_some(Instruction::PsrRegisterTransfer(Self {
                 condition,
                 use_spsr: bit_is_set(raw, 22),
                 destination: select_bits(raw, 12, 4) as RegisterNumber,
-            })
-        } else {
-            DataProcessing::decode(raw, condition)
-        }
+            }))
+            .or_else(|| DataProcessing::decode(raw, condition))
     }
 }
 
@@ -434,11 +433,12 @@ pub struct RegisterPsrTransfer {
 }
 
 impl InstructionType for RegisterPsrTransfer {
-    fn decode(raw: RawInstruction, condition: Condition) -> Instruction {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        let use_spsr = bit_is_set(raw, 22);
+
         // This instruction type overlaps with data processing in non-tabled bits.
-        if (raw & 0x0FBF_FFF0) == 0x0129_F000 || (raw & 0x0DBF_F000) == 0x0128_F000 {
-            let use_spsr = bit_is_set(raw, 22);
-            Instruction::RegisterPsrTransfer(if bit_is_set(raw, 16) {
+        ((raw & 0x0FBF_FFF0) == 0x0129_F000 || (raw & 0x0DBF_F000) == 0x0128_F000)
+            .then_some(Instruction::RegisterPsrTransfer(if bit_is_set(raw, 16) {
                 // Bit 16 indicates that the entire PSR should be transferred.
                 Self {
                     condition,
@@ -461,10 +461,8 @@ impl InstructionType for RegisterPsrTransfer {
                         DataOperand::decode_register(raw)
                     },
                 }
-            })
-        } else {
-            DataProcessing::decode(raw, condition)
-        }
+            }))
+            .or_else(|| DataProcessing::decode(raw, condition))
     }
 }
 
@@ -491,14 +489,14 @@ pub struct SingleDataSwap {
 }
 
 impl InstructionType for SingleDataSwap {
-    fn decode(raw: RawInstruction, condition: Condition) -> Instruction {
-        Instruction::SingleDataSwap(Self {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        Some(Instruction::SingleDataSwap(Self {
             condition,
             swap_byte: bit_is_set(raw, 22),
             address: select_bits(raw, 16, 4) as RegisterNumber,
             destination: select_bits(raw, 12, 4) as RegisterNumber,
             source: (raw & 0xF) as RegisterNumber,
-        })
+        }))
     }
 }
 
@@ -550,8 +548,8 @@ pub struct SingleDataTransfer {
 }
 
 impl InstructionType for SingleDataTransfer {
-    fn decode(raw: RawInstruction, condition: Condition) -> Instruction {
-        Instruction::SingleDataTransfer(Self {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        Some(Instruction::SingleDataTransfer(Self {
             condition,
             pre_index: bit_is_set(raw, 24),
             add_offset: bit_is_set(raw, 23),
@@ -561,11 +559,13 @@ impl InstructionType for SingleDataTransfer {
             base: select_bits(raw, 16, 4) as RegisterNumber,
             target: select_bits(raw, 12, 4) as RegisterNumber,
             offset: if bit_is_set(raw, 25) {
-                DataOperand::decode_register(raw)
+                // Only immediate shifts are supported by this instruction.
+                let offset = DataOperand::decode_register(raw);
+                matches!(offset, DataOperand::ShiftImmediate(_, _, _)).then_some(offset)?
             } else {
                 DataOperand::Immediate(raw & 0xFFF)
             },
-        })
+        }))
     }
 }
 
@@ -590,12 +590,12 @@ pub struct SoftwareInterrupt {
 }
 
 impl InstructionType for SoftwareInterrupt {
-    fn decode(raw: RawInstruction, condition: Condition) -> Instruction {
-        Instruction::SoftwareInterrupt(Self {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        Some(Instruction::SoftwareInterrupt(Self {
             condition,
             // The comment comprises the entire instruction after the condition and SWI identifier.
             comment: raw & 0x00FF_FFFF,
-        })
+        }))
     }
 }
 
@@ -628,8 +628,6 @@ impl Instruction {
         // Look up this instruction in the instruction type tables.
         let l1_index = select_bits(raw, 20, 8) as usize;
         let l2_offset = select_bits(raw, 4, 4) as usize;
-        Some(DECODE_L2_TABLE[DECODE_L1_TABLE[l1_index] + l2_offset](
-            raw, condition,
-        ))
+        DECODE_L2_TABLE[DECODE_L1_TABLE[l1_index] + l2_offset](raw, condition)
     }
 }

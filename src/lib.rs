@@ -1,3 +1,4 @@
+#![feature(bool_to_option)]
 // Clippy configuration.
 #![deny(clippy::all)]
 #![deny(clippy::nursery)]

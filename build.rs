@@ -83,7 +83,7 @@ fn build_decode_tables() -> Result<(), Box<dyn Error>> {
     // We need the Instruction module to gain access to decoding functions.
     writeln!(
         &mut output,
-        "type DecodeCallback = fn(RawInstruction, Condition) -> Instruction;"
+        "type DecodeCallback = fn(RawInstruction, Condition) -> Option<Instruction>;"
     )?;
 
     // L1 decoding table, comprised of indexes into the L2 table.
