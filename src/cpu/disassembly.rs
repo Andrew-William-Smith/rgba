@@ -1,6 +1,17 @@
 use crate::cpu::instruction;
+use crate::cpu::instruction::DataOperand;
 use crate::cpu::instruction::ShiftType;
 use std::fmt;
+
+/// Format an optional instruction field, returning the specified string if the
+/// value of the field is `true` and an empty string otherwise.
+fn optional_field(is_set: bool, set_value: &str) -> &str {
+    if is_set {
+        set_value
+    } else {
+        ""
+    }
+}
 
 /// The Assembly mnemonics used for each execution `Condition`.
 const CONDITION_MNEMONICS: [&str; 15] = [
@@ -28,7 +39,7 @@ impl fmt::Display for instruction::ArithmeticOperation {
 /// The Assembly mnemonics used for each register `ShiftType`.
 const SHIFT_TYPE_MNEMONICS: [&str; 4] = ["lsl", "lsr", "asr", "ror"];
 
-impl fmt::Display for instruction::DataOperand {
+impl fmt::Display for DataOperand {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Self::Immediate(value) => write!(f, "#{:#X}", value),
@@ -55,7 +66,7 @@ impl fmt::Display for instruction::DataOperand {
 
 impl fmt::Display for instruction::Branch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let link_mnemonic = if self.link { "l" } else { "" };
+        let link_mnemonic = optional_field(self.link, "l");
         write!(f, "b{}{} #{:+}", link_mnemonic, self.condition, self.offset)
     }
 }
@@ -69,7 +80,7 @@ impl fmt::Display for instruction::BranchAndExchange {
 impl fmt::Display for instruction::DataProcessing {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use instruction::ArithmeticOperation::*;
-        let cpsr_suffix = if self.set_cpsr { "s" } else { "" };
+        let cpsr_suffix = optional_field(self.set_cpsr, "s");
 
         match self.operation {
             // Single-operand instructions.
@@ -101,7 +112,7 @@ impl fmt::Display for instruction::DataProcessing {
 
 impl fmt::Display for instruction::Multiply {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let suffix = if self.set_cpsr { "s" } else { "" };
+        let suffix = optional_field(self.set_cpsr, "s");
         let common = format!(
             "{}{} r{},r{},r{}",
             self.condition, suffix, self.destination, self.multiplicand2, self.multiplicand1
@@ -119,7 +130,7 @@ impl fmt::Display for instruction::MultiplyLong {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let sign_prefix = if self.signed { "s" } else { "u" };
         let mnemonic = if self.accumulate { "mlal" } else { "mull" };
-        let suffix = if self.set_cpsr { "s" } else { "" };
+        let suffix = optional_field(self.set_cpsr, "s");
 
         write!(
             f,
@@ -150,7 +161,7 @@ impl fmt::Display for instruction::PsrRegisterTransfer {
 impl fmt::Display for instruction::RegisterPsrTransfer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let psr_name = if self.use_spsr { "spsr" } else { "cpsr" };
-        let flag_suffix = if self.flags_only { "_flg" } else { "" };
+        let flag_suffix = optional_field(self.flags_only, "_flg");
         write!(
             f,
             "msr{} {}{},{}",
@@ -161,11 +172,43 @@ impl fmt::Display for instruction::RegisterPsrTransfer {
 
 impl fmt::Display for instruction::SingleDataSwap {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let byte_suffix = if self.swap_byte { "b" } else { "" };
+        let byte_suffix = optional_field(self.swap_byte, "b");
         write!(
             f,
             "swp{}{} r{},r{},[r{}]",
             self.condition, byte_suffix, self.destination, self.source, self.address
+        )
+    }
+}
+
+impl fmt::Display for instruction::SingleDataTransfer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mnemonic = if self.load { "ldr" } else { "str" };
+        let byte_suffix = optional_field(self.transfer_byte, "b");
+        let user_suffix = optional_field(!self.pre_index && self.write_back, "t");
+        let write_suffix = optional_field(self.write_back, "!");
+        let offset_sign = if self.add_offset { "+" } else { "-" };
+
+        let address = match &self.offset {
+            DataOperand::Immediate(0) => format!("[r{}]", self.base),
+            DataOperand::Immediate(offset) if self.pre_index => format!(
+                "[r{},#{}{:#X}]{}",
+                self.base, offset_sign, offset, write_suffix
+            ),
+            shift_operand if self.pre_index => format!(
+                "[r{},{}{}]{}",
+                self.base, offset_sign, shift_operand, write_suffix
+            ),
+            DataOperand::Immediate(offset) => {
+                format!("[r{}],#{}{:#X}", self.base, offset_sign, offset)
+            }
+            shift_operand => format!("[r{}],{}{}", self.base, offset_sign, shift_operand),
+        };
+
+        write!(
+            f,
+            "{}{}{}{} r{},{}",
+            mnemonic, self.condition, byte_suffix, user_suffix, self.target, address
         )
     }
 }

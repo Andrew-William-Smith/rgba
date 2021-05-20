@@ -7,6 +7,7 @@
 #![allow(clippy::enum_glob_use)]
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::struct_excessive_bools)]
 #![allow(clippy::use_self)]
 
 pub mod cpu;

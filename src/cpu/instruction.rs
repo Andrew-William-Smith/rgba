@@ -502,6 +502,73 @@ impl InstructionType for SingleDataSwap {
     }
 }
 
+/// A load or store of either a single byte or an entire word between a register
+/// and a memory address specified from a base register, plus or minus an
+/// offset stored either as an immediate value or in memory.  This instruction
+/// may use either pre- or post-increment logic for the addition of this offset,
+/// and the resultant address may optionally be written back to the base
+/// register.
+#[derive(Debug, Eq, PartialEq)]
+pub struct SingleDataTransfer {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// Whether the offset should be added to the base address before
+    /// (pre-indexing, `true`) or after (post-indexing, `false`) the memory
+    /// transfer is performed.
+    pub pre_index: bool,
+    /// Whether the offset should be added to (`true`) or subtracted from
+    /// (`false`) the value of the base register.
+    pub add_offset: bool,
+    /// Whether to transfer only a byte (`true`) or an entire 32-bit word
+    /// (`false`) to/from memory.
+    pub transfer_byte: bool,
+    /// Whether the computed address should be written back to the base address
+    /// register once the memory transfer is complete.  For post-indexed
+    /// addresses, this value should only be `true` if the CPU is running in a
+    /// privileged mode; in this environment, setting the write-back bit high
+    /// will result in the transfer being performed in User mode.  Since the GBA
+    /// does not feature memory protection or address translation, this
+    /// mode-switching functionality is irrelevant to us.
+    pub write_back: bool,
+    /// Whether we should read a value from memory (load, `true`) or write a
+    /// value out to memory (store, `false`).
+    pub load: bool,
+    /// The register from which to source the base address before the offset is
+    /// applied.  If write-back is requested, this register will contain the
+    /// offset address after the memory operation is performed.
+    pub base: RegisterNumber,
+    /// Either the register from which to source the value to write for a store
+    /// or into which to read the value of a load, depending on the type of
+    /// operation being performed.
+    pub target: RegisterNumber,
+    /// The offset to apply to the base address in the manner specified
+    /// elsewhere in the instruction.  Note that while the register-relative
+    /// forms are the same as in the `DataProcessing` instructions, the
+    /// immediate variant is a directly-encoded 12-bit value, lacking the
+    /// rotation field.
+    pub offset: DataOperand,
+}
+
+impl InstructionType for SingleDataTransfer {
+    fn decode(raw: RawInstruction, condition: Condition) -> Instruction {
+        Instruction::SingleDataTransfer(Self {
+            condition,
+            pre_index: bit_is_set(raw, 24),
+            add_offset: bit_is_set(raw, 23),
+            transfer_byte: bit_is_set(raw, 22),
+            write_back: bit_is_set(raw, 21),
+            load: bit_is_set(raw, 20),
+            base: select_bits(raw, 16, 4) as RegisterNumber,
+            target: select_bits(raw, 12, 4) as RegisterNumber,
+            offset: if bit_is_set(raw, 25) {
+                DataOperand::decode_register(raw)
+            } else {
+                DataOperand::Immediate(raw & 0xFFF)
+            },
+        })
+    }
+}
+
 /// A software interrupt instruction (`swi`), which switches the CPU into
 /// Supervisor mode and sets the program counter to the software interrupt
 /// vector at address `8`.  This vector itself should be a branch instruction to
@@ -545,6 +612,7 @@ pub enum Instruction {
     PsrRegisterTransfer(PsrRegisterTransfer),
     RegisterPsrTransfer(RegisterPsrTransfer),
     SingleDataSwap(SingleDataSwap),
+    SingleDataTransfer(SingleDataTransfer),
     SoftwareInterrupt(SoftwareInterrupt),
 }
 

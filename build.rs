@@ -13,7 +13,7 @@ use std::{
 /// determined from a static table.  This table consists of two masks: one to
 /// select the bits that pertain to the instruction type, and one to confirm
 /// that those bits are correct.
-const ENCODING_SELECT: [(usize, usize, &str); 9] = [
+const ENCODING_SELECT: [(usize, usize, &str); 10] = [
     (0b1100_0000_0000, 0b0000_0000_0000, "DataProcessing"),
     (0b1111_1011_1111, 0b0001_0000_0000, "PsrRegisterTransfer"),
     (0b1101_1011_1111, 0b0001_0010_0000, "RegisterPsrTransfer"),
@@ -23,7 +23,7 @@ const ENCODING_SELECT: [(usize, usize, &str); 9] = [
     (0b1111_1111_1111, 0b0001_0010_0001, "BranchAndExchange"),
     // 0b1110_0100_1001, 0b0000_0000_1001 -> Halfword Data Transfer: Register Offset
     // 0b1110_0100_1001, 0b0000_0100_1001 -> Halfword Data Transfer: Immediate Offset
-    // 0b1100_0000_0000, 0b0100_0000_0000 -> Single Data Transfer
+    (0b1100_0000_0000, 0b0100_0000_0000, "SingleDataTransfer"),
     // 0b1110_0000_0001, 0b0110_0000_0001 -> Undefined
     // 0b1110_0000_0000, 0b1000_0000_0000 -> Block Data Transfer
     (0b1110_0000_0000, 0b1010_0000_0000, "Branch"),
