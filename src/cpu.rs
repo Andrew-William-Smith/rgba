@@ -1,3 +1,5 @@
+use crate::bit_twiddling::select_bits;
+
 pub mod disassembly;
 pub mod instruction;
 
@@ -8,7 +10,17 @@ pub type Address = u32;
 pub type AddressOffset = i32;
 
 /// A register number, nominally restricted to the range `[0, 15]`.
-pub type RegisterNumber = u8;
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct RegisterNumber(pub u8);
+
+impl RegisterNumber {
+    /// Extract a register number beginning at the specified `low_bit` index in
+    /// the specified `instruction` to a register number.
+    #[must_use]
+    pub fn extract(instruction: u32, low_bit: u8) -> Self {
+        Self(select_bits(instruction, low_bit, 4) as u8)
+    }
+}
 
 /// The operating mode of the ARM7TDMI CPU.  All modes other than `User` are
 /// privileged and thus can execute privileged instructions.

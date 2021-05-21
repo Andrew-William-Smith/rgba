@@ -11,4 +11,5 @@
 #![allow(clippy::struct_excessive_bools)]
 #![allow(clippy::use_self)]
 
+mod bit_twiddling;
 pub mod cpu;

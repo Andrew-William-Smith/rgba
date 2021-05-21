@@ -1,36 +1,9 @@
+use crate::bit_twiddling::{bit_is_set, select_bits, sign_extend};
 use crate::cpu::{AddressOffset, RegisterNumber};
 use derive_more::Display;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use std::fmt;
-
-/// Determine whether the bit at the specified `index`, counted from the least
-/// significant bit, is set in the specified `value`.
-const fn bit_is_set(value: u32, index: u8) -> bool {
-    value & (1 << index) != 0
-}
-
-/// Select the specified number of bits (`size`) beginning at the specified
-/// `low_bit` index in the specified `value`.  The resulting value will feature
-/// the low bit shifted into index `0`.
-const fn select_bits(value: u32, low_bit: u8, size: u8) -> u32 {
-    (value >> low_bit) & ((1 << size) - 1)
-}
-
-/// Extend the value of the bit in the specified `sign_bit` of the specified
-/// `value` through all bits above the sign bit.
-const fn sign_extend(value: u32, sign_bit: u8) -> i32 {
-    let shift = 31 - sign_bit;
-    ((value as i32) << shift) >> shift
-}
-
-/// "Decode" an instruction that falls into a documented gap in the encoding
-/// space.  Note that this function should *not* be used to return any invalid
-/// instruction, only those that are explicitly designated to be undefined by
-/// the ISA.
-const fn decode_undefined(_raw: RawInstruction, _condition: Condition) -> Option<Instruction> {
-    None
-}
 
 /// The type of an instruction upon being fetched from memory.  Raw instructions
 /// are converted to `Instruction`s in the Decode stage.
@@ -73,6 +46,14 @@ pub enum Condition {
     LessOrEqual,
     /// Execute unconditionally (suffix `al`).
     Always,
+}
+
+/// "Decode" an instruction that falls into a documented gap in the encoding
+/// space.  Note that this function should *not* be used to return any invalid
+/// instruction, only those that are explicitly designated to be undefined by
+/// the ISA.
+const fn decode_undefined(_raw: RawInstruction, _condition: Condition) -> Option<Instruction> {
+    None
 }
 
 /// The operations permissible in the `OpCode` field of an arithmetic (data
@@ -192,12 +173,12 @@ impl DataOperand {
     /// ARM documentation are retained.
     #[must_use]
     fn decode_register(spec: u32) -> Self {
-        let source_register = (spec & 0xF) as RegisterNumber;
+        let source_register = RegisterNumber::extract(spec, 0);
         let shift_type = ShiftType::from_u32(select_bits(spec, 5, 2)).unwrap();
 
         if bit_is_set(spec, 4) {
             // If bit 4 is set, the shift amount is stored in a register.
-            let shift_register = select_bits(spec, 8, 4) as RegisterNumber;
+            let shift_register = RegisterNumber::extract(spec, 8);
             Self::ShiftRegister(shift_type, shift_register, source_register)
         } else {
             // Shift amount is an immediate value.
@@ -246,7 +227,7 @@ impl DataTransferOptions {
             add_offset: bit_is_set(spec, 23),
             write_back: bit_is_set(spec, 21),
             load: bit_is_set(spec, 20),
-            base: select_bits(spec, 16, 4) as RegisterNumber,
+            base: RegisterNumber::extract(spec, 16),
         }
     }
 }
@@ -306,7 +287,7 @@ impl InstructionType for BranchAndExchange {
         Some(Instruction::BranchAndExchange(Self {
             condition,
             // The register number is encoded in the low nybble of the instruction.
-            source: (raw & 0xF) as RegisterNumber,
+            source: RegisterNumber::extract(raw, 0),
         }))
     }
 }
@@ -339,8 +320,8 @@ impl InstructionType for DataProcessing {
             condition,
             operation: ArithmeticOperation::from_u32(select_bits(raw, 21, 4))?,
             set_cpsr: bit_is_set(raw, 20),
-            operand1: select_bits(raw, 16, 4) as RegisterNumber,
-            destination: select_bits(raw, 12, 4) as RegisterNumber,
+            operand1: RegisterNumber::extract(raw, 16),
+            destination: RegisterNumber::extract(raw, 12),
             operand2: if bit_is_set(raw, 25) {
                 DataOperand::decode_immediate(raw)
             } else {
@@ -381,10 +362,10 @@ impl InstructionType for Multiply {
             condition,
             accumulate: bit_is_set(raw, 21),
             set_cpsr: bit_is_set(raw, 20),
-            destination: select_bits(raw, 16, 4) as RegisterNumber,
-            addend: select_bits(raw, 12, 4) as RegisterNumber,
-            multiplicand1: select_bits(raw, 8, 4) as RegisterNumber,
-            multiplicand2: (raw & 0xF) as RegisterNumber,
+            destination: RegisterNumber::extract(raw, 16),
+            addend: RegisterNumber::extract(raw, 12),
+            multiplicand1: RegisterNumber::extract(raw, 8),
+            multiplicand2: RegisterNumber::extract(raw, 0),
         }))
     }
 }
@@ -427,10 +408,10 @@ impl InstructionType for MultiplyLong {
             signed: bit_is_set(raw, 22),
             accumulate: bit_is_set(raw, 21),
             set_cpsr: bit_is_set(raw, 20),
-            destination_high: select_bits(raw, 16, 4) as RegisterNumber,
-            destination_low: select_bits(raw, 12, 4) as RegisterNumber,
-            multiplicand1: select_bits(raw, 8, 4) as RegisterNumber,
-            multiplicand2: (raw & 0xF) as RegisterNumber,
+            destination_high: RegisterNumber::extract(raw, 16),
+            destination_low: RegisterNumber::extract(raw, 12),
+            multiplicand1: RegisterNumber::extract(raw, 8),
+            multiplicand2: RegisterNumber::extract(raw, 0),
         }))
     }
 }
@@ -456,7 +437,7 @@ impl InstructionType for PsrRegisterTransfer {
             .then_some(Instruction::PsrRegisterTransfer(Self {
                 condition,
                 use_spsr: bit_is_set(raw, 22),
-                destination: select_bits(raw, 12, 4) as RegisterNumber,
+                destination: RegisterNumber::extract(raw, 12),
             }))
             .or_else(|| DataProcessing::decode(raw, condition))
     }
@@ -499,7 +480,7 @@ impl InstructionType for RegisterPsrTransfer {
                     source: DataOperand::ShiftImmediate(
                         ShiftType::LogicalShiftLeft,
                         0,
-                        (raw & 0xF) as RegisterNumber,
+                        RegisterNumber::extract(raw, 0),
                     ),
                 }
             } else {
@@ -545,9 +526,9 @@ impl InstructionType for SingleDataSwap {
         Some(Instruction::SingleDataSwap(Self {
             condition,
             swap_byte: bit_is_set(raw, 22),
-            address: select_bits(raw, 16, 4) as RegisterNumber,
-            destination: select_bits(raw, 12, 4) as RegisterNumber,
-            source: (raw & 0xF) as RegisterNumber,
+            address: RegisterNumber::extract(raw, 16),
+            destination: RegisterNumber::extract(raw, 12),
+            source: RegisterNumber::extract(raw, 0),
         }))
     }
 }
@@ -586,7 +567,7 @@ impl InstructionType for SingleDataTransfer {
             condition,
             transfer_byte: bit_is_set(raw, 22),
             opt: DataTransferOptions::decode(raw),
-            target: select_bits(raw, 12, 4) as RegisterNumber,
+            target: RegisterNumber::extract(raw, 12),
             offset: if bit_is_set(raw, 25) {
                 // Only immediate shifts are supported by this instruction.
                 let offset = DataOperand::decode_register(raw);

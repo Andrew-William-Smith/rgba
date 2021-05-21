@@ -1,5 +1,11 @@
 use crate::decode_succeeds;
 use rgba::cpu::instruction::*;
+use rgba::cpu::RegisterNumber;
+
+/// Shorthand for defining a register number, since we use them **everywhere**.
+const fn r(number: u8) -> RegisterNumber {
+    RegisterNumber(number)
+}
 
 /// Assert that the condition of each decoded instructions matches the expected
 /// condition.
@@ -55,9 +61,9 @@ fn branches() {
 fn branch_and_exchange() {
     decode_succeeds!(
         BranchAndExchange,
-        0xE12FFF10 => BranchAndExchange { condition: Always, source: 0 } => "bx r0",
-        0x212FFF17 => BranchAndExchange { condition: HigherOrSame, source: 7 } => "bxcs r7",
-        0xD12FFF1A => BranchAndExchange { condition: LessOrEqual, source: 10 } => "bxle r10",
+        0xE12FFF10 => BranchAndExchange { condition: Always, source: r(0) } => "bx r0",
+        0x212FFF17 => BranchAndExchange { condition: HigherOrSame, source: r(7) } => "bxcs r7",
+        0xD12FFF1A => BranchAndExchange { condition: LessOrEqual, source: r(10) } => "bxle r10",
     );
 }
 
@@ -73,9 +79,9 @@ fn data_processing() {
             condition: Condition::Always,
             operation,
             set_cpsr,
-            operand1: 1,
-            destination: 0,
-            operand2: ShiftImmediate(LogicalShiftLeft, 0, 2),
+            operand1: r(1),
+            destination: r(0),
+            operand2: ShiftImmediate(LogicalShiftLeft, 0, r(2)),
         }
     }
 
@@ -84,8 +90,8 @@ fn data_processing() {
             condition: Condition::Always,
             operation: Add,
             set_cpsr: false,
-            operand1: 1,
-            destination: 0,
+            operand1: r(1),
+            destination: r(0),
             operand2,
         }
     }
@@ -129,18 +135,18 @@ fn data_processing() {
         // Immediate operand.
         0xE2810C0F => simple_data(Immediate(0xF00)) => "add r0,r1,#0xF00",
         // Shift operand 2 by an immediate value.
-        0xE0810382 => simple_data(ShiftImmediate(LogicalShiftLeft, 7, 2)) => "add r0,r1,r2,lsl #7",
-        0xE08103A2 => simple_data(ShiftImmediate(LogicalShiftRight, 7, 2)) => "add r0,r1,r2,lsr #7",
-        0xE08103C2 => simple_data(ShiftImmediate(ArithmeticShiftRight, 7, 2)) => "add r0,r1,r2,asr #7",
-        0xE08103E2 => simple_data(ShiftImmediate(RotateRight, 7, 2)) => "add r0,r1,r2,ror #7",
-        0xE0810062 => simple_data(ShiftImmediate(RotateRight, 0, 2)) => "add r0,r1,r2,rrx",
+        0xE0810382 => simple_data(ShiftImmediate(LogicalShiftLeft, 7, r(2))) => "add r0,r1,r2,lsl #7",
+        0xE08103A2 => simple_data(ShiftImmediate(LogicalShiftRight, 7, r(2))) => "add r0,r1,r2,lsr #7",
+        0xE08103C2 => simple_data(ShiftImmediate(ArithmeticShiftRight, 7, r(2))) => "add r0,r1,r2,asr #7",
+        0xE08103E2 => simple_data(ShiftImmediate(RotateRight, 7, r(2))) => "add r0,r1,r2,ror #7",
+        0xE0810062 => simple_data(ShiftImmediate(RotateRight, 0, r(2))) => "add r0,r1,r2,rrx",
         // Shift operand 2 by a register value.
-        0xE0810312 => simple_data(ShiftRegister(LogicalShiftLeft, 3, 2)) => "add r0,r1,r2,lsl r3",
-        0xE0810332 => simple_data(ShiftRegister(LogicalShiftRight, 3, 2)) => "add r0,r1,r2,lsr r3",
-        0xE0810352 => simple_data(ShiftRegister(ArithmeticShiftRight, 3, 2)) => "add r0,r1,r2,asr r3",
-        0xE0810372 => simple_data(ShiftRegister(RotateRight, 3, 2)) => "add r0,r1,r2,ror r3",
+        0xE0810312 => simple_data(ShiftRegister(LogicalShiftLeft, r(3), r(2))) => "add r0,r1,r2,lsl r3",
+        0xE0810332 => simple_data(ShiftRegister(LogicalShiftRight, r(3), r(2))) => "add r0,r1,r2,lsr r3",
+        0xE0810352 => simple_data(ShiftRegister(ArithmeticShiftRight, r(3), r(2))) => "add r0,r1,r2,asr r3",
+        0xE0810372 => simple_data(ShiftRegister(RotateRight, r(3), r(2))) => "add r0,r1,r2,ror r3",
         // Using R0 as a ROR operand should not disassemble as RRX.
-        0xE0810072 => simple_data(ShiftRegister(RotateRight, 0, 2)) => "add r0,r1,r2,ror r0",
+        0xE0810072 => simple_data(ShiftRegister(RotateRight, r(0), r(2))) => "add r0,r1,r2,ror r0",
     );
 }
 
@@ -149,13 +155,13 @@ fn multiply() {
     decode_succeeds!(
         Multiply,
         // Permutations of accumulate and condition code control bits.
-        0xE0000192 => Multiply { condition: Always, accumulate: false, set_cpsr: false, destination: 0, addend: 0, multiplicand1: 1, multiplicand2: 2 } => "mul r0,r2,r1",
-        0xE0100192 => Multiply { condition: Always, accumulate: false, set_cpsr: true, destination: 0, addend: 0, multiplicand1: 1, multiplicand2: 2 } => "muls r0,r2,r1",
-        0xE0201293 => Multiply { condition: Always, accumulate: true, set_cpsr: false, destination: 0, addend: 1, multiplicand1: 2, multiplicand2: 3 } => "mla r0,r3,r2,r1",
-        0xE0301293 => Multiply { condition: Always, accumulate: true, set_cpsr: true, destination: 0, addend: 1, multiplicand1: 2, multiplicand2: 3 } => "mlas r0,r3,r2,r1",
+        0xE0000192 => Multiply { condition: Always, accumulate: false, set_cpsr: false, destination: r(0), addend: r(0), multiplicand1: r(1), multiplicand2: r(2) } => "mul r0,r2,r1",
+        0xE0100192 => Multiply { condition: Always, accumulate: false, set_cpsr: true, destination: r(0), addend: r(0), multiplicand1: r(1), multiplicand2: r(2) } => "muls r0,r2,r1",
+        0xE0201293 => Multiply { condition: Always, accumulate: true, set_cpsr: false, destination: r(0), addend: r(1), multiplicand1: r(2), multiplicand2: r(3) } => "mla r0,r3,r2,r1",
+        0xE0301293 => Multiply { condition: Always, accumulate: true, set_cpsr: true, destination: r(0), addend: r(1), multiplicand1: r(2), multiplicand2: r(3) } => "mlas r0,r3,r2,r1",
         // With some different condition codes.
-        0x00314392 => Multiply { condition: Equal, accumulate: true, set_cpsr: true, destination: 1, addend: 4, multiplicand1: 3, multiplicand2: 2 } => "mlaeqs r1,r2,r3,r4",
-        0xA0130192 => Multiply { condition: GreaterOrEqual, accumulate: false, set_cpsr: true, destination: 3, addend: 0, multiplicand1: 1, multiplicand2: 2 } => "mulges r3,r2,r1",
+        0x00314392 => Multiply { condition: Equal, accumulate: true, set_cpsr: true, destination: r(1), addend: r(4), multiplicand1: r(3), multiplicand2: r(2) } => "mlaeqs r1,r2,r3,r4",
+        0xA0130192 => Multiply { condition: GreaterOrEqual, accumulate: false, set_cpsr: true, destination: r(3), addend: r(0), multiplicand1: r(1), multiplicand2: r(2) } => "mulges r3,r2,r1",
     );
 }
 
@@ -164,16 +170,16 @@ fn multiply_long() {
     decode_succeeds!(
         MultiplyLong,
         // Permutations of all control bits.
-        0xE0801392 => MultiplyLong { condition: Always, signed: false, accumulate: false, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umull r1,r0,r2,r3",
-        0xE0C01392 => MultiplyLong { condition: Always, signed: true, accumulate: false, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smull r1,r0,r2,r3",
-        0xE0A01392 => MultiplyLong { condition: Always, signed: false, accumulate: true, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umlal r1,r0,r2,r3",
-        0xE0E01392 => MultiplyLong { condition: Always, signed: true, accumulate: true, set_cpsr: false, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smlal r1,r0,r2,r3",
-        0xE0901392 => MultiplyLong { condition: Always, signed: false, accumulate: false, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umulls r1,r0,r2,r3",
-        0xE0D01392 => MultiplyLong { condition: Always, signed: true, accumulate: false, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smulls r1,r0,r2,r3",
-        0xE0B01392 => MultiplyLong { condition: Always, signed: false, accumulate: true, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "umlals r1,r0,r2,r3",
-        0xE0F01392 => MultiplyLong { condition: Always, signed: true, accumulate: true, set_cpsr: true, destination_high: 0, destination_low: 1, multiplicand1: 3, multiplicand2: 2 } => "smlals r1,r0,r2,r3",
+        0xE0801392 => MultiplyLong { condition: Always, signed: false, accumulate: false, set_cpsr: false, destination_high: r(0), destination_low: r(1), multiplicand1: r(3), multiplicand2: r(2) } => "umull r1,r0,r2,r3",
+        0xE0C01392 => MultiplyLong { condition: Always, signed: true, accumulate: false, set_cpsr: false, destination_high: r(0), destination_low: r(1), multiplicand1: r(3), multiplicand2: r(2) } => "smull r1,r0,r2,r3",
+        0xE0A01392 => MultiplyLong { condition: Always, signed: false, accumulate: true, set_cpsr: false, destination_high: r(0), destination_low: r(1), multiplicand1: r(3), multiplicand2: r(2) } => "umlal r1,r0,r2,r3",
+        0xE0E01392 => MultiplyLong { condition: Always, signed: true, accumulate: true, set_cpsr: false, destination_high: r(0), destination_low: r(1), multiplicand1: r(3), multiplicand2: r(2) } => "smlal r1,r0,r2,r3",
+        0xE0901392 => MultiplyLong { condition: Always, signed: false, accumulate: false, set_cpsr: true, destination_high: r(0), destination_low: r(1), multiplicand1: r(3), multiplicand2: r(2) } => "umulls r1,r0,r2,r3",
+        0xE0D01392 => MultiplyLong { condition: Always, signed: true, accumulate: false, set_cpsr: true, destination_high: r(0), destination_low: r(1), multiplicand1: r(3), multiplicand2: r(2) } => "smulls r1,r0,r2,r3",
+        0xE0B01392 => MultiplyLong { condition: Always, signed: false, accumulate: true, set_cpsr: true, destination_high: r(0), destination_low: r(1), multiplicand1: r(3), multiplicand2: r(2) } => "umlals r1,r0,r2,r3",
+        0xE0F01392 => MultiplyLong { condition: Always, signed: true, accumulate: true, set_cpsr: true, destination_high: r(0), destination_low: r(1), multiplicand1: r(3), multiplicand2: r(2) } => "smlals r1,r0,r2,r3",
         // With a different condition code, since these mnemonics are becoming alarmingly long.
-        0x00F9A190 => MultiplyLong { condition: Equal, signed: true, accumulate: true, set_cpsr: true, destination_high: 9, destination_low: 10, multiplicand1: 1, multiplicand2: 0 } => "smlaleqs r10,r9,r0,r1",
+        0x00F9A190 => MultiplyLong { condition: Equal, signed: true, accumulate: true, set_cpsr: true, destination_high: r(9), destination_low: r(10), multiplicand1: r(1), multiplicand2: r(0) } => "smlaleqs r10,r9,r0,r1",
     );
 }
 
@@ -181,9 +187,9 @@ fn multiply_long() {
 fn psr_to_register_transfer() {
     decode_succeeds!(
         PsrRegisterTransfer,
-        0xE10F1000 => PsrRegisterTransfer { condition: Always, use_spsr: false, destination: 1 } => "mrs r1,cpsr",
-        0xE14F1000 => PsrRegisterTransfer { condition: Always, use_spsr: true, destination: 1 } => "mrs r1,spsr",
-        0x614FC000 => PsrRegisterTransfer { condition: Overflow, use_spsr: true, destination: 12 } => "mrsvs r12,spsr",
+        0xE10F1000 => PsrRegisterTransfer { condition: Always, use_spsr: false, destination: r(1) } => "mrs r1,cpsr",
+        0xE14F1000 => PsrRegisterTransfer { condition: Always, use_spsr: true, destination: r(1) } => "mrs r1,spsr",
+        0x614FC000 => PsrRegisterTransfer { condition: Overflow, use_spsr: true, destination: r(12) } => "mrsvs r12,spsr",
     );
 }
 
@@ -195,10 +201,10 @@ fn register_to_psr_transfer() {
     decode_succeeds!(
         RegisterPsrTransfer,
         // Permutations of control bits, register operand.
-        0xE129F004 => RegisterPsrTransfer { condition: Always, use_spsr: false, flags_only: false, source: ShiftImmediate(LogicalShiftLeft, 0, 4) } => "msr cpsr,r4",
-        0xE169F004 => RegisterPsrTransfer { condition: Always, use_spsr: true, flags_only: false, source: ShiftImmediate(LogicalShiftLeft, 0, 4) } => "msr spsr,r4",
-        0xE128F004 => RegisterPsrTransfer { condition: Always, use_spsr: false, flags_only: true, source: ShiftImmediate(LogicalShiftLeft, 0, 4) } => "msr cpsr_flg,r4",
-        0xE168F004 => RegisterPsrTransfer { condition: Always, use_spsr: true, flags_only: true, source: ShiftImmediate(LogicalShiftLeft, 0, 4) } => "msr spsr_flg,r4",
+        0xE129F004 => RegisterPsrTransfer { condition: Always, use_spsr: false, flags_only: false, source: ShiftImmediate(LogicalShiftLeft, 0, r(4)) } => "msr cpsr,r4",
+        0xE169F004 => RegisterPsrTransfer { condition: Always, use_spsr: true, flags_only: false, source: ShiftImmediate(LogicalShiftLeft, 0, r(4)) } => "msr spsr,r4",
+        0xE128F004 => RegisterPsrTransfer { condition: Always, use_spsr: false, flags_only: true, source: ShiftImmediate(LogicalShiftLeft, 0, r(4)) } => "msr cpsr_flg,r4",
+        0xE168F004 => RegisterPsrTransfer { condition: Always, use_spsr: true, flags_only: true, source: ShiftImmediate(LogicalShiftLeft, 0, r(4)) } => "msr spsr_flg,r4",
         // Immediate operands for flag transfer.
         0xE328FC0F => RegisterPsrTransfer { condition: Always, use_spsr: false, flags_only: true, source: Immediate(0xF00) } => "msr cpsr_flg,#0xF00",
         0x4368FC0F => RegisterPsrTransfer { condition: Negative, use_spsr: true, flags_only: true, source: Immediate(0xF00) } => "msrmi spsr_flg,#0xF00",
@@ -209,9 +215,9 @@ fn register_to_psr_transfer() {
 fn single_data_swap() {
     decode_succeeds!(
         SingleDataSwap,
-        0xE1020091 => SingleDataSwap { condition: Always, swap_byte: false, address: 2, destination: 0, source: 1 } => "swp r0,r1,[r2]",
-        0xE1420091 => SingleDataSwap { condition: Always, swap_byte: true, address: 2, destination: 0, source: 1 } => "swpb r0,r1,[r2]",
-        0x314AC09B => SingleDataSwap { condition: Lower, swap_byte: true, address: 10, destination: 12, source: 11 } => "swpccb r12,r11,[r10]",
+        0xE1020091 => SingleDataSwap { condition: Always, swap_byte: false, address: r(2), destination: r(0), source: r(1) } => "swp r0,r1,[r2]",
+        0xE1420091 => SingleDataSwap { condition: Always, swap_byte: true, address: r(2), destination: r(0), source: r(1) } => "swpb r0,r1,[r2]",
+        0x314AC09B => SingleDataSwap { condition: Lower, swap_byte: true, address: r(10), destination: r(12), source: r(11) } => "swpccb r12,r11,[r10]",
     );
 }
 
@@ -223,28 +229,28 @@ fn single_data_transfer() {
     decode_succeeds!(
         SingleDataTransfer,
         // Simplest possible case: load and store a register with no offset in both word and byte mode.
-        0xE5943000 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: 4 }, target: 3, offset: Immediate(0) } => "ldr r3,[r4]",
-        0xE5843000 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: false, base: 4 }, target: 3, offset: Immediate(0) } => "str r3,[r4]",
-        0xE5D43000 => SingleDataTransfer { condition: Always, transfer_byte: true, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: 4 }, target: 3, offset: Immediate(0) } => "ldrb r3,[r4]",
-        0xE5C43000 => SingleDataTransfer { condition: Always, transfer_byte: true, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: false, base: 4 }, target: 3, offset: Immediate(0) } => "strb r3,[r4]",
+        0xE5943000 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(4) }, target: r(3), offset: Immediate(0) } => "ldr r3,[r4]",
+        0xE5843000 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: false, base: r(4) }, target: r(3), offset: Immediate(0) } => "str r3,[r4]",
+        0xE5D43000 => SingleDataTransfer { condition: Always, transfer_byte: true, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(4) }, target: r(3), offset: Immediate(0) } => "ldrb r3,[r4]",
+        0xE5C43000 => SingleDataTransfer { condition: Always, transfer_byte: true, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: false, base: r(4) }, target: r(3), offset: Immediate(0) } => "strb r3,[r4]",
         // Pre- and post-indexed immediate offsets.
-        0xE5943F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: 4 }, target: 3, offset: Immediate(0xF00) } => "ldr r3,[r4,#+0xF00]",
-        0xE5143F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: false, load: true, base: 4 }, target: 3, offset: Immediate(0xF00) } => "ldr r3,[r4,#-0xF00]",
-        0xE5B43F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: true, load: true, base: 4 }, target: 3, offset: Immediate(0xF00) } => "ldr r3,[r4,#+0xF00]!",
-        0xE5343F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: true, load: true, base: 4 }, target: 3, offset: Immediate(0xF00) } => "ldr r3,[r4,#-0xF00]!",
-        0xE4943F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: false, add_offset: true, write_back: false, load: true, base: 4 }, target: 3, offset: Immediate(0xF00) } => "ldr r3,[r4],#+0xF00",
-        0xE4143F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: false, add_offset: false, write_back: false, load: true, base: 4 }, target: 3, offset: Immediate(0xF00) } => "ldr r3,[r4],#-0xF00",
-        0xE4B43F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: false, add_offset: true, write_back: true, load: true, base: 4 }, target: 3, offset: Immediate(0xF00) } => "ldrt r3,[r4],#+0xF00",
-        0xE4EBA437 => SingleDataTransfer { condition: Always, transfer_byte: true, opt: DataTransferOptions { pre_index: false, add_offset: true, write_back: true, load: false, base: 11 }, target: 10, offset: Immediate(0x437) } => "strbt r10,[r11],#+0x437",
+        0xE5943F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(4) }, target: r(3), offset: Immediate(0xF00) } => "ldr r3,[r4,#+0xF00]",
+        0xE5143F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: false, load: true, base: r(4) }, target: r(3), offset: Immediate(0xF00) } => "ldr r3,[r4,#-0xF00]",
+        0xE5B43F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: true, load: true, base: r(4) }, target: r(3), offset: Immediate(0xF00) } => "ldr r3,[r4,#+0xF00]!",
+        0xE5343F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: true, load: true, base: r(4) }, target: r(3), offset: Immediate(0xF00) } => "ldr r3,[r4,#-0xF00]!",
+        0xE4943F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: false, add_offset: true, write_back: false, load: true, base: r(4) }, target: r(3), offset: Immediate(0xF00) } => "ldr r3,[r4],#+0xF00",
+        0xE4143F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: false, add_offset: false, write_back: false, load: true, base: r(4) }, target: r(3), offset: Immediate(0xF00) } => "ldr r3,[r4],#-0xF00",
+        0xE4B43F00 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: false, add_offset: true, write_back: true, load: true, base: r(4) }, target: r(3), offset: Immediate(0xF00) } => "ldrt r3,[r4],#+0xF00",
+        0xE4EBA437 => SingleDataTransfer { condition: Always, transfer_byte: true, opt: DataTransferOptions { pre_index: false, add_offset: true, write_back: true, load: false, base: r(11) }, target: r(10), offset: Immediate(0x437) } => "strbt r10,[r11],#+0x437",
         // Pre- and post-indexed shift offsets.  Only immediate shifts are available.
-        0xE7943005 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: 4 }, target: 3, offset: ShiftImmediate(LogicalShiftLeft, 0, 5) } => "ldr r3,[r4,+r5]",
-        0xE7143005 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: false, load: true, base: 4 }, target: 3, offset: ShiftImmediate(LogicalShiftLeft, 0, 5) } => "ldr r3,[r4,-r5]",
-        0xE79433C5 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: 4 }, target: 3, offset: ShiftImmediate(ArithmeticShiftRight, 7, 5) } => "ldr r3,[r4,+r5,asr #7]",
-        0xE7343065 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: true, load: true, base: 4 }, target: 3, offset: ShiftImmediate(RotateRight, 0, 5) } => "ldr r3,[r4,-r5,rrx]!",
-        0xE6143005 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: false, add_offset: false, write_back: false, load: true, base: 4 }, target: 3, offset: ShiftImmediate(LogicalShiftLeft, 0, 5) } => "ldr r3,[r4],-r5",
-        0xE6943305 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: false, add_offset: true, write_back: false, load: true, base: 4 }, target: 3, offset: ShiftImmediate(LogicalShiftLeft, 6, 5) } => "ldr r3,[r4],+r5,lsl #6",
+        0xE7943005 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(4) }, target: r(3), offset: ShiftImmediate(LogicalShiftLeft, 0, r(5)) } => "ldr r3,[r4,+r5]",
+        0xE7143005 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: false, load: true, base: r(4) }, target: r(3), offset: ShiftImmediate(LogicalShiftLeft, 0, r(5)) } => "ldr r3,[r4,-r5]",
+        0xE79433C5 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(4) }, target: r(3), offset: ShiftImmediate(ArithmeticShiftRight, 7, r(5)) } => "ldr r3,[r4,+r5,asr #7]",
+        0xE7343065 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: true, load: true, base: r(4) }, target: r(3), offset: ShiftImmediate(RotateRight, 0, r(5)) } => "ldr r3,[r4,-r5,rrx]!",
+        0xE6143005 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: false, add_offset: false, write_back: false, load: true, base: r(4) }, target: r(3), offset: ShiftImmediate(LogicalShiftLeft, 0, r(5)) } => "ldr r3,[r4],-r5",
+        0xE6943305 => SingleDataTransfer { condition: Always, transfer_byte: false, opt: DataTransferOptions { pre_index: false, add_offset: true, write_back: false, load: true, base: r(4) }, target: r(3), offset: ShiftImmediate(LogicalShiftLeft, 6, r(5)) } => "ldr r3,[r4],+r5,lsl #6",
         // And a kitchen sink instruction.
-        0xC66BAFCC => SingleDataTransfer { condition: Greater, transfer_byte: true, opt: DataTransferOptions { pre_index: false, add_offset: false, write_back: true, load: false, base: 11 }, target: 10, offset: ShiftImmediate(ArithmeticShiftRight, 31, 12) } => "strgtbt r10,[r11],-r12,asr #31",
+        0xC66BAFCC => SingleDataTransfer { condition: Greater, transfer_byte: true, opt: DataTransferOptions { pre_index: false, add_offset: false, write_back: true, load: false, base: r(11) }, target: r(10), offset: ShiftImmediate(ArithmeticShiftRight, 31, r(12)) } => "strgtbt r10,[r11],-r12,asr #31",
     );
 }
 
