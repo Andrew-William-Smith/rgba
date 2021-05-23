@@ -1,0 +1,8 @@
+condense_wildcard_suffixes = true
+format_macro_bodies = true
+format_macro_matchers = true
+imports_granularity = "Crate"
+max_width = 120
+newline_style = "Unix"
+overflow_delimited_expr = true
+use_field_init_shorthand = true

@@ -1,5 +1,7 @@
-use crate::bit_twiddling::{bit_is_set, select_bits, sign_extend};
-use crate::cpu::{AddressOffset, RegisterNumber};
+use crate::{
+    bit_twiddling::{bit_is_set, select_bits, sign_extend},
+    cpu::{AddressOffset, RegisterNumber},
+};
 use derive_more::Display;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;

@@ -1,6 +1,11 @@
-use crate::bit_twiddling::bit_is_set;
-use crate::cpu::instruction::{BlockTransferMode, DataOperand, ShiftType};
-use crate::cpu::{instruction, RegisterNumber};
+use crate::{
+    bit_twiddling::bit_is_set,
+    cpu::{
+        instruction,
+        instruction::{BlockTransferMode, DataOperand, ShiftType},
+        RegisterNumber,
+    },
+};
 use std::fmt;
 
 /// Format an optional instruction field, returning the specified string if the
@@ -16,8 +21,7 @@ fn optional_field(is_set: bool, set_value: &str) -> &str {
 /// The names of the architectural registers in all modes, where the index into
 /// this array corresponds with the register number.
 const REGISTER_NAMES: [&str; 16] = [
-    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "sp", "lr",
-    "pc",
+    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "sp", "lr", "pc",
 ];
 
 /// Get the human-readable name of the register with the specified `number`.
@@ -40,8 +44,7 @@ impl fmt::Display for instruction::Condition {
 
 /// The Assembly mnemonics used for each `ArithmeticOperation`.
 const ARITHMETIC_OPERATION_MNEMONICS: [&str; 16] = [
-    "and", "eor", "sub", "rsb", "add", "adc", "sbc", "rsc", "tst", "teq", "cmp", "cmn", "orr",
-    "mov", "bic", "mvn",
+    "and", "eor", "sub", "rsb", "add", "adc", "sbc", "rsc", "tst", "teq", "cmp", "cmn", "orr", "mov", "bic", "mvn",
 ];
 
 impl fmt::Display for instruction::ArithmeticOperation {
@@ -96,11 +99,7 @@ fn format_register_list(registers: u32) -> String {
         if range_start == range_end {
             intervals.push(RegisterNumber(range_start).to_string());
         } else if range_end != u8::MAX {
-            intervals.push(format!(
-                "{}-{}",
-                RegisterNumber(range_start),
-                RegisterNumber(range_end)
-            ));
+            intervals.push(format!("{}-{}", RegisterNumber(range_start), RegisterNumber(range_end)));
         }
 
         reg += 1;
@@ -110,7 +109,6 @@ fn format_register_list(registers: u32) -> String {
 }
 
 impl fmt::Display for instruction::BlockDataTransfer {
-    #[rustfmt::skip]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mnemonic = if self.opt.load { "ldm" } else { "stm" };
         let write_suffix = optional_field(self.opt.write_back, "!");
@@ -177,12 +175,7 @@ impl fmt::Display for instruction::DataProcessing {
             _ => write!(
                 f,
                 "{}{}{} {},{},{}",
-                self.operation,
-                self.condition,
-                cpsr_suffix,
-                self.destination,
-                self.operand1,
-                self.operand2
+                self.operation, self.condition, cpsr_suffix, self.destination, self.operand1, self.operand2
             ),
         }
     }
@@ -236,11 +229,7 @@ impl fmt::Display for instruction::RegisterPsrTransfer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let psr_name = if self.use_spsr { "spsr" } else { "cpsr" };
         let flag_suffix = optional_field(self.flags_only, "_flg");
-        write!(
-            f,
-            "msr{} {}{},{}",
-            self.condition, psr_name, flag_suffix, self.source
-        )
+        write!(f, "msr{} {}{},{}", self.condition, psr_name, flag_suffix, self.source)
     }
 }
 
@@ -265,14 +254,12 @@ impl fmt::Display for instruction::SingleDataTransfer {
 
         let address = match &self.offset {
             DataOperand::Immediate(0) => format!("[{}]", self.opt.base),
-            DataOperand::Immediate(offset) if self.opt.pre_index => format!(
-                "[{},#{}{:#X}]{}",
-                self.opt.base, offset_sign, offset, write_suffix
-            ),
-            shift_operand if self.opt.pre_index => format!(
-                "[{},{}{}]{}",
-                self.opt.base, offset_sign, shift_operand, write_suffix
-            ),
+            DataOperand::Immediate(offset) if self.opt.pre_index => {
+                format!("[{},#{}{:#X}]{}", self.opt.base, offset_sign, offset, write_suffix)
+            }
+            shift_operand if self.opt.pre_index => {
+                format!("[{},{}{}]{}", self.opt.base, offset_sign, shift_operand, write_suffix)
+            }
             DataOperand::Immediate(offset) => {
                 format!("[{}],#{}{:#X}", self.opt.base, offset_sign, offset)
             }

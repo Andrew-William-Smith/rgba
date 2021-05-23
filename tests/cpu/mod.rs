@@ -6,7 +6,7 @@ mod decode_instruction;
 /// of the same type is working properly.
 #[macro_export]
 macro_rules! decode_succeeds {
-    ($type:ident, $($bytecode:literal => $decoded:expr => $disassembly:expr),+$(,)?) => {
+    ($type:ident, $($bytecode:literal => $disassembly:expr => $decoded:expr),+$(,)?) => {
         $(
             use Condition::*;
             let bytecode: u32 = $bytecode;

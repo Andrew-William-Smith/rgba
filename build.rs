@@ -94,11 +94,7 @@ fn build_decode_tables() -> Result<(), Box<dyn Error>> {
         &mut output,
         "const DECODE_L1_TABLE: [usize; {}] = [{}];",
         DECODE_L1_TABLE_SIZE,
-        l1_table
-            .iter()
-            .map(usize::to_string)
-            .collect::<Vec<_>>()
-            .join(", "),
+        l1_table.iter().map(usize::to_string).collect::<Vec<_>>().join(", "),
     )?;
 
     // L2 decoding table, associating select bytes to decoding callbacks.
