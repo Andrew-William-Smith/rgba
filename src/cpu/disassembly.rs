@@ -2,7 +2,7 @@ use crate::{
     bit_twiddling::bit_is_set,
     cpu::{
         instruction,
-        instruction::{BlockTransferMode, DataOperand, ShiftType},
+        instruction::{BlockTransferMode, DataOperand, ShiftType, SingleTransferType},
         RegisterNumber,
     },
 };
@@ -247,10 +247,14 @@ impl fmt::Display for instruction::SingleDataSwap {
 impl fmt::Display for instruction::SingleDataTransfer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mnemonic = if self.opt.load { "ldr" } else { "str" };
-        let byte_suffix = optional_field(self.transfer_byte, "b");
         let user_suffix = optional_field(!self.opt.pre_index && self.opt.write_back, "t");
         let write_suffix = optional_field(self.opt.write_back, "!");
         let offset_sign = if self.opt.add_offset { '+' } else { '-' };
+
+        let size_suffix = match self.transfer_type {
+            SingleTransferType::UnsignedByte => "b",
+            SingleTransferType::Word => "",
+        };
 
         let address = match &self.offset {
             DataOperand::Immediate(0) => format!("[{}]", self.opt.base),
@@ -269,7 +273,7 @@ impl fmt::Display for instruction::SingleDataTransfer {
         write!(
             f,
             "{}{}{}{} {},{}",
-            mnemonic, self.condition, byte_suffix, user_suffix, self.target, address
+            mnemonic, self.condition, size_suffix, user_suffix, self.target, address
         )
     }
 }

@@ -254,6 +254,16 @@ pub enum BlockTransferMode {
     UserBank,
 }
 
+/// The amount of data and byte order to be transferred in a single data
+/// transfer instruction.
+#[derive(Debug, Eq, PartialEq)]
+pub enum SingleTransferType {
+    /// Transfer a zero-extended 8-bit value.
+    UnsignedByte,
+    /// Transfer a 32-bit value.
+    Word,
+}
+
 /// A specific type of ARM instruction with a unique encoding scheme.
 pub trait InstructionType: fmt::Display + Sized {
     /// Decode the specified instruction to be executed only upon the specified
@@ -608,9 +618,9 @@ impl InstructionType for SingleDataSwap {
 pub struct SingleDataTransfer {
     /// The condition upon which this instruction will be executed.
     pub condition: Condition,
-    /// Whether to transfer only a byte (`true`) or an entire 32-bit word
-    /// (`false`) to/from memory.
-    pub transfer_byte: bool,
+    /// The amount of memory to transfer, and the most significant bit extension
+    /// to apply to the transferred quantity.
+    pub transfer_type: SingleTransferType,
     /// Options set for this instruction that are common to all memory transfer
     /// operations.
     pub opt: DataTransferOptions,
@@ -630,7 +640,11 @@ impl InstructionType for SingleDataTransfer {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
         Some(Instruction::SingleDataTransfer(Self {
             condition,
-            transfer_byte: bit_is_set(raw, 22),
+            transfer_type: if bit_is_set(raw, 22) {
+                SingleTransferType::UnsignedByte
+            } else {
+                SingleTransferType::Word
+            },
             opt: DataTransferOptions::decode(raw),
             target: RegisterNumber::extract(raw, 12),
             offset: if bit_is_set(raw, 25) {
