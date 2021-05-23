@@ -291,6 +291,28 @@ fn single_data_transfer() {
 }
 
 #[test]
+fn single_data_transfer_alternate() {
+    use DataOperand::*;
+    use ShiftType::*;
+    use SingleTransferType::*;
+
+    decode_succeeds!(
+        SingleDataTransfer,
+        // All mnemonics for transfer sizes and sign extension.
+        0xE1D760B0 => "ldrh r6,[r7]" => SingleDataTransfer { condition: Always, transfer_type: UnsignedHalfWord, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(7) }, target: r(6), offset: Immediate(0) },
+        0xE1C760B0 => "strh r6,[r7]" => SingleDataTransfer { condition: Always, transfer_type: UnsignedHalfWord, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: false, base: r(7) }, target: r(6), offset: Immediate(0) },
+        0xE1D760F0 => "ldrsh r6,[r7]" => SingleDataTransfer { condition: Always, transfer_type: SignedHalfWord, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(7) }, target: r(6), offset: Immediate(0) },
+        0xE1D760D0 => "ldrsb r6,[r7]" => SingleDataTransfer { condition: Always, transfer_type: SignedByte, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(7) }, target: r(6), offset: Immediate(0) },
+        // Examples from the ARM manual.
+        0xE13210B3 => "ldrh r1,[r2,-r3]!" => SingleDataTransfer { condition: Always, transfer_type: UnsignedHalfWord, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: true, load: true, base: r(2) }, target: r(1), offset: ShiftImmediate(LogicalShiftLeft, 0, r(3)) },
+        0xE1C430BE => "strh r3,[r4,#+0xE]" => SingleDataTransfer { condition: Always, transfer_type: UnsignedHalfWord, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: false, base: r(4) }, target: r(3), offset: Immediate(0xE) },
+        0xE0528DDF => "ldrsb r8,[r2],#-0xDF" => SingleDataTransfer { condition: Always, transfer_type: SignedByte, opt: DataTransferOptions { pre_index: false, add_offset: false, write_back: false, load: true, base: r(2) }, target: r(8), offset: Immediate(0xDF) },
+        0x11D0B0F0 => "ldrnesh r11,[r0]" => SingleDataTransfer { condition: NotEqual, transfer_type: SignedHalfWord, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(0) }, target: r(11), offset: Immediate(0) },
+        0xE1CF5AB7 => "strh r5,[pc,#+0xA7]" => SingleDataTransfer { condition: Always, transfer_type: UnsignedHalfWord, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: false, base: r(15) }, target: r(5), offset: Immediate(0xA7) },
+    );
+}
+
+#[test]
 fn software_interrupt() {
     decode_succeeds!(
         SoftwareInterrupt,

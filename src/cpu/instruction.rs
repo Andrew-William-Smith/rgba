@@ -260,6 +260,12 @@ pub enum BlockTransferMode {
 pub enum SingleTransferType {
     /// Transfer a zero-extended 8-bit value.
     UnsignedByte,
+    /// Transfer a sign-extended 8-bit value.
+    SignedByte,
+    /// Transfer a zero-extended 16-bit value.
+    UnsignedHalfWord,
+    /// Transfer a sign-extended 16-bit value.
+    SignedHalfWord,
     /// Transfer a 32-bit value.
     Word,
 }
@@ -653,6 +659,38 @@ impl InstructionType for SingleDataTransfer {
                 matches!(offset, DataOperand::ShiftImmediate(_, _, _)).then_some(offset)?
             } else {
                 DataOperand::Immediate(raw & 0xFFF)
+            },
+        }))
+    }
+}
+
+impl SingleDataTransfer {
+    /// Decode an instruction transferring a single value between a register and
+    /// memory using the alternate encoding scheme, which is called the
+    /// *Halfword and Signed Data Transfer* scheme in the ARM documentation.
+    /// Note especially that this encoding scheme is **less** specific than
+    /// those that precede it, and so it must immediately follow the
+    /// `DataProcessing` instructions in the decoding priority table.
+    #[must_use]
+    pub fn decode_alternate(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        let transfer_type = match (bit_is_set(raw, 6), bit_is_set(raw, 5)) {
+            (true, true) => SingleTransferType::SignedHalfWord,
+            (true, false) => SingleTransferType::SignedByte,
+            (false, true) => SingleTransferType::UnsignedHalfWord,
+            _ => unreachable!("Instruction decode sequencing failure"),
+        };
+
+        Some(Instruction::SingleDataTransfer(Self {
+            condition,
+            transfer_type,
+            opt: DataTransferOptions::decode(raw),
+            target: RegisterNumber::extract(raw, 12),
+            offset: if bit_is_set(raw, 22) {
+                // Offset is an 8-bit immediate divided by the S and H bits.
+                DataOperand::Immediate(((raw >> 4) & 0xF0) | (raw & 0xF))
+            } else {
+                // Offset is a register with no scaling.
+                DataOperand::ShiftImmediate(ShiftType::LogicalShiftLeft, 0, RegisterNumber::extract(raw, 0))
             },
         }))
     }

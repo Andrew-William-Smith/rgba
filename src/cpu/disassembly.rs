@@ -253,6 +253,9 @@ impl fmt::Display for instruction::SingleDataTransfer {
 
         let size_suffix = match self.transfer_type {
             SingleTransferType::UnsignedByte => "b",
+            SingleTransferType::SignedByte => "sb",
+            SingleTransferType::UnsignedHalfWord => "h",
+            SingleTransferType::SignedHalfWord => "sh",
             SingleTransferType::Word => "",
         };
 
