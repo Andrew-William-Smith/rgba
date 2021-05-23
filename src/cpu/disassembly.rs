@@ -1,5 +1,5 @@
-use crate::cpu::instruction::DataOperand;
-use crate::cpu::instruction::ShiftType;
+use crate::bit_twiddling::bit_is_set;
+use crate::cpu::instruction::{BlockTransferMode, DataOperand, ShiftType};
 use crate::cpu::{instruction, RegisterNumber};
 use std::fmt;
 
@@ -78,6 +78,70 @@ impl fmt::Display for DataOperand {
     }
 }
 
+/// Format the register list used in `BlockDataTransfer` instructions,
+/// expressing series of subsequent registers using interval notation.
+fn format_register_list(registers: u32) -> String {
+    let mut intervals = Vec::new();
+    let mut reg = 0;
+    while reg < 16 {
+        // Find the current register interval.
+        let range_start = reg;
+        let mut range_end = u8::MAX;
+        while reg < 16 && bit_is_set(registers, reg) {
+            range_end = reg;
+            reg += 1;
+        }
+
+        // Format the register interval according to its size.
+        if range_start == range_end {
+            intervals.push(RegisterNumber(range_start).to_string());
+        } else if range_end != u8::MAX {
+            intervals.push(format!(
+                "{}-{}",
+                RegisterNumber(range_start),
+                RegisterNumber(range_end)
+            ));
+        }
+
+        reg += 1;
+    }
+
+    intervals.join(",")
+}
+
+impl fmt::Display for instruction::BlockDataTransfer {
+    #[rustfmt::skip]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mnemonic = if self.opt.load { "ldm" } else { "stm" };
+        let write_suffix = optional_field(self.opt.write_back, "!");
+        let mode_suffix = optional_field(self.mode != BlockTransferMode::Normal, "^");
+
+        let (suffix1, suffix2) = if self.opt.base.0 == 13 {
+            // Use different suffixes when operations are being performed on the stack.
+            let stack_type = if self.opt.load == self.opt.pre_index { 'e' } else { 'f' };
+            let stack_direction = if self.opt.load == self.opt.add_offset { 'd' } else { 'a' };
+            (stack_type, stack_direction)
+        } else {
+            let increment = if self.opt.add_offset { 'i' } else { 'd' };
+            let offset_timing = if self.opt.pre_index { 'b' } else { 'a' };
+            (increment, offset_timing)
+        };
+
+        write!(
+            f,
+            "{}{}{}{} {}{},{{{}}}{}",
+            mnemonic,
+            self.condition,
+            suffix1,
+            suffix2,
+            self.opt.base,
+            write_suffix,
+            format_register_list(u32::from(self.registers)),
+            mode_suffix
+        )
+    }
+}
+
 impl fmt::Display for instruction::Branch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let link_mnemonic = optional_field(self.link, "l");
@@ -142,7 +206,7 @@ impl fmt::Display for instruction::Multiply {
 
 impl fmt::Display for instruction::MultiplyLong {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let sign_prefix = if self.signed { "s" } else { "u" };
+        let sign_prefix = if self.signed { 's' } else { 'u' };
         let mnemonic = if self.accumulate { "mlal" } else { "mull" };
         let suffix = optional_field(self.set_cpsr, "s");
 
@@ -197,7 +261,7 @@ impl fmt::Display for instruction::SingleDataTransfer {
         let byte_suffix = optional_field(self.transfer_byte, "b");
         let user_suffix = optional_field(!self.opt.pre_index && self.opt.write_back, "t");
         let write_suffix = optional_field(self.opt.write_back, "!");
-        let offset_sign = if self.opt.add_offset { "+" } else { "-" };
+        let offset_sign = if self.opt.add_offset { '+' } else { '-' };
 
         let address = match &self.offset {
             DataOperand::Immediate(0) => format!("[{}]", self.opt.base),

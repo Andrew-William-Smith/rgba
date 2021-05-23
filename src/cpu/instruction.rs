@@ -232,12 +232,75 @@ impl DataTransferOptions {
     }
 }
 
+/// Special mode-switching operations that may be performed by
+/// `BlockDataTransfer` instructions in addition to the straightforward register
+/// transfer.  Nearly all instructions will likely use the `Normal` variant: the
+/// others are only permissible in privileged modes.
+#[derive(Debug, Eq, PartialEq)]
+pub enum BlockTransferMode {
+    /// The registers should be transferred from the current mode's bank as
+    /// specified, and no modifications should be performed to CPSR.
+    Normal,
+    /// The SPSR for the current mode should be transferred to CPSR.  This
+    /// option should only be specified when the instruction is a load (`ldm`),
+    /// the `S` bit in the instruction is set, and `r15` (`pc`) is present in
+    /// the list of registers to be transferred.
+    LoadSpsr,
+    /// The registers should be transferred from the User bank rather than the
+    /// current mode's bank.  This option should only be specified when the `S`
+    /// bit in the instruction is set and the rules for `LoadSpsr` do not apply.
+    UserBank,
+}
+
 /// A specific type of ARM instruction with a unique encoding scheme.
 pub trait InstructionType: fmt::Display + Sized {
     /// Decode the specified instruction to be executed only upon the specified
     /// condition, returning a variant of the decoded `Instruction` type.  If
     /// the instruction could not be decoded, `None` is returned.
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction>;
+}
+
+/// A block data transfer operation, which loads or stores multiple registers
+/// from or to memory at a time.  The control bits `P` and `U` define four
+/// addressing modes for these instructions: pre- and post- increment and
+/// decrement, each of which determines whether the registers are written above
+/// or below the base address and the value of the base register if write-back
+/// is requested.
+#[derive(Debug, Eq, PartialEq)]
+pub struct BlockDataTransfer {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// The mode-switching operation that should occur when this instruction is
+    /// executed; this field is derived from multiple bits in the instruction.
+    pub mode: BlockTransferMode,
+    /// Options set for this instruction that are common to all memory transfer
+    /// operations.
+    pub opt: DataTransferOptions,
+    /// A list of the registers to be transferred, in which the bit at each
+    /// index, counted from the least significant, indicates whether that bit
+    /// should be transferred.
+    pub registers: u16,
+}
+
+impl InstructionType for BlockDataTransfer {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        let transfer_r15 = bit_is_set(raw, 15);
+        let user_psr_bit = bit_is_set(raw, 22);
+        let opt = DataTransferOptions::decode(raw);
+
+        Some(Instruction::BlockDataTransfer(Self {
+            condition,
+            mode: if opt.load && transfer_r15 && user_psr_bit {
+                BlockTransferMode::LoadSpsr
+            } else if user_psr_bit {
+                BlockTransferMode::UserBank
+            } else {
+                BlockTransferMode::Normal
+            },
+            opt,
+            registers: raw as u16,
+        }))
+    }
 }
 
 /// A branch instruction, which sets the program counter to an address offset
@@ -247,7 +310,7 @@ pub struct Branch {
     /// The condition upon which this instruction will be executed.
     pub condition: Condition,
     /// Whether the current value of the program counter should be stored in
-    /// `r14` (the *link* register) when this instruction is executed.
+    /// `r14` (the *link* register `lr`) when this instruction is executed.
     pub link: bool,
     /// The offset from the current program counter to which to branch.  Due to
     /// instruction prefetch, the target address will be 8 bytes beyond that of
@@ -614,6 +677,7 @@ impl InstructionType for SoftwareInterrupt {
 /// Execute stage.
 #[derive(Display, Eq, PartialEq)]
 pub enum Instruction {
+    BlockDataTransfer(BlockDataTransfer),
     Branch(Branch),
     BranchAndExchange(BranchAndExchange),
     DataProcessing(DataProcessing),

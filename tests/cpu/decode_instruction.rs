@@ -1,6 +1,5 @@
 use crate::decode_succeeds;
-use rgba::cpu::instruction::*;
-use rgba::cpu::RegisterNumber;
+use rgba::cpu::{instruction::*, RegisterNumber};
 
 /// Shorthand for defining a register number, since we use them **everywhere**.
 const fn r(number: u8) -> RegisterNumber {
@@ -38,6 +37,42 @@ fn condition_opcodes() {
         0xCA000000 => Greater,
         0xDA000000 => LessOrEqual,
         0xEA000000 => Always,
+    );
+}
+
+#[test]
+fn block_data_transfer() {
+    use BlockTransferMode::*;
+
+    decode_succeeds!(
+        BlockDataTransfer,
+        // Mnemonics for stack operations with each addressing mode.
+        0xE9BDE00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: true, load: true, base: r(13) }, registers: 0xE00F } => "ldmed sp!,{r0-r3,sp-pc}",
+        0xE8BDE00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: false, add_offset: true, write_back: true, load: true, base: r(13) }, registers: 0xE00F } => "ldmfd sp!,{r0-r3,sp-pc}",
+        0xE93DE00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: true, load: true, base: r(13) }, registers: 0xE00F } => "ldmea sp!,{r0-r3,sp-pc}",
+        0xE83DE00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: false, add_offset: false, write_back: true, load: true, base: r(13) }, registers: 0xE00F } => "ldmfa sp!,{r0-r3,sp-pc}",
+        0xE9ADE00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: true, load: false, base: r(13) }, registers: 0xE00F } => "stmfa sp!,{r0-r3,sp-pc}",
+        0xE8ADE00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: false, add_offset: true, write_back: true, load: false, base: r(13) }, registers: 0xE00F } => "stmea sp!,{r0-r3,sp-pc}",
+        0xE92DE00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: true, load: false, base: r(13) }, registers: 0xE00F } => "stmfd sp!,{r0-r3,sp-pc}",
+        0xE82DE00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: false, add_offset: false, write_back: true, load: false, base: r(13) }, registers: 0xE00F } => "stmed sp!,{r0-r3,sp-pc}",
+        // Mnemonics for non-stack operations.
+        0xE9B7E00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: true, load: true, base: r(7) }, registers: 0xE00F } => "ldmib r7!,{r0-r3,sp-pc}",
+        0xE8B7E00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: false, add_offset: true, write_back: true, load: true, base: r(7) }, registers: 0xE00F } => "ldmia r7!,{r0-r3,sp-pc}",
+        0xE937E00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: true, load: true, base: r(7) }, registers: 0xE00F } => "ldmdb r7!,{r0-r3,sp-pc}",
+        0xE837E00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: false, add_offset: false, write_back: true, load: true, base: r(7) }, registers: 0xE00F } => "ldmda r7!,{r0-r3,sp-pc}",
+        0xE9A7E00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: true, load: false, base: r(7) }, registers: 0xE00F } => "stmib r7!,{r0-r3,sp-pc}",
+        0xE8A7E00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: false, add_offset: true, write_back: true, load: false, base: r(7) }, registers: 0xE00F } => "stmia r7!,{r0-r3,sp-pc}",
+        0xE927E00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: true, load: false, base: r(7) }, registers: 0xE00F } => "stmdb r7!,{r0-r3,sp-pc}",
+        0xE827E00F => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: false, add_offset: false, write_back: true, load: false, base: r(7) }, registers: 0xE00F } => "stmda r7!,{r0-r3,sp-pc}",
+        // Alternate banking modes.
+        0xE9D08000 => BlockDataTransfer { condition: Always, mode: LoadSpsr, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(0) }, registers: 0x8000 } => "ldmib r0,{pc}^",
+        0xE9C08000 => BlockDataTransfer { condition: Always, mode: UserBank, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: false, base: r(0) }, registers: 0x8000 } => "stmib r0,{pc}^",
+        0xE9D00008 => BlockDataTransfer { condition: Always, mode: UserBank, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(0) }, registers: 0x0008 } => "ldmib r0,{r3}^",
+        0xE9C00008 => BlockDataTransfer { condition: Always, mode: UserBank, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: false, base: r(0) }, registers: 0x0008 } => "stmib r0,{r3}^",
+        // Register formatting in disassembly.
+        0x59BD5555 => BlockDataTransfer { condition: NonNegative, mode: Normal, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: true, load: true, base: r(13) }, registers: 0x5555 } => "ldmpled sp!,{r0,r2,r4,r6,r8,r10,r12,lr}",
+        0x99BDAAAA => BlockDataTransfer { condition: LowerOrSame, mode: Normal, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: true, load: true, base: r(13) }, registers: 0xAAAA } => "ldmlsed sp!,{r1,r3,r5,r7,r9,r11,sp,pc}",
+        0xE9BD7777 => BlockDataTransfer { condition: Always, mode: Normal, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: true, load: true, base: r(13) }, registers: 0x7777 } => "ldmed sp!,{r0-r2,r4-r6,r8-r10,r12-lr}",
     );
 }
 
