@@ -1,4 +1,4 @@
-use crate::bit_twiddling::select_bits;
+use crate::bit_twiddling::BitTwiddling;
 
 pub mod disassembly;
 pub mod instruction;
@@ -18,7 +18,7 @@ impl RegisterNumber {
     /// the specified `instruction` to a register number.
     #[must_use]
     pub fn extract(instruction: u32, low_bit: u8) -> Self {
-        Self(select_bits(instruction, low_bit, 4) as u8)
+        Self(instruction.select_bits(low_bit, 4) as u8)
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::{
-    bit_twiddling::{bit_is_set, select_bits, sign_extend},
+    bit_twiddling::BitTwiddling,
     cpu::{AddressOffset, RegisterNumber},
 };
 use derive_more::Display;
@@ -161,7 +161,7 @@ impl DataOperand {
     #[must_use]
     fn decode_immediate(spec: u32) -> Self {
         let value = spec & 0xFF;
-        let rotation = select_bits(spec, 8, 4) * 2;
+        let rotation = spec.select_bits(8, 4) * 2;
         Self::Immediate(value.rotate_right(rotation))
     }
 
@@ -176,15 +176,15 @@ impl DataOperand {
     #[must_use]
     fn decode_register(spec: u32) -> Self {
         let source_register = RegisterNumber::extract(spec, 0);
-        let shift_type = ShiftType::from_u32(select_bits(spec, 5, 2)).unwrap();
+        let shift_type = ShiftType::from_u32(spec.select_bits(5, 2)).unwrap();
 
-        if bit_is_set(spec, 4) {
+        if spec.bit_is_set(4) {
             // If bit 4 is set, the shift amount is stored in a register.
             let shift_register = RegisterNumber::extract(spec, 8);
             Self::ShiftRegister(shift_type, shift_register, source_register)
         } else {
             // Shift amount is an immediate value.
-            let shift_amount = select_bits(spec, 7, 5) as u8;
+            let shift_amount = spec.select_bits(7, 5) as u8;
             Self::ShiftImmediate(shift_type, shift_amount, source_register)
         }
     }
@@ -225,10 +225,10 @@ impl DataTransferOptions {
     /// responsibility of the caller to handle all validation.
     fn decode(spec: u32) -> Self {
         Self {
-            pre_index: bit_is_set(spec, 24),
-            add_offset: bit_is_set(spec, 23),
-            write_back: bit_is_set(spec, 21),
-            load: bit_is_set(spec, 20),
+            pre_index: spec.bit_is_set(24),
+            add_offset: spec.bit_is_set(23),
+            write_back: spec.bit_is_set(21),
+            load: spec.bit_is_set(20),
             base: RegisterNumber::extract(spec, 16),
         }
     }
@@ -302,8 +302,8 @@ pub struct BlockDataTransfer {
 
 impl InstructionType for BlockDataTransfer {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
-        let transfer_r15 = bit_is_set(raw, 15);
-        let user_psr_bit = bit_is_set(raw, 22);
+        let transfer_r15 = raw.bit_is_set(15);
+        let user_psr_bit = raw.bit_is_set(22);
         let opt = DataTransferOptions::decode(raw);
 
         Some(Instruction::BlockDataTransfer(Self {
@@ -342,9 +342,9 @@ impl InstructionType for Branch {
         Some(Instruction::Branch(Self {
             condition,
             // If bit 24 is set, this is a Branch with Link (bl).
-            link: bit_is_set(raw, 24),
+            link: raw.bit_is_set(24),
             // 24-bit offset must be shifted 2 bits to the right.
-            offset: sign_extend(raw << 2, 25),
+            offset: (raw << 2).sign_extend(25),
         }))
     }
 }
@@ -399,11 +399,11 @@ impl InstructionType for DataProcessing {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
         Some(Instruction::DataProcessing(Self {
             condition,
-            operation: ArithmeticOperation::from_u32(select_bits(raw, 21, 4))?,
-            set_cpsr: bit_is_set(raw, 20),
+            operation: ArithmeticOperation::from_u32(raw.select_bits(21, 4))?,
+            set_cpsr: raw.bit_is_set(20),
             operand1: RegisterNumber::extract(raw, 16),
             destination: RegisterNumber::extract(raw, 12),
-            operand2: if bit_is_set(raw, 25) {
+            operand2: if raw.bit_is_set(25) {
                 DataOperand::decode_immediate(raw)
             } else {
                 DataOperand::decode_register(raw)
@@ -441,8 +441,8 @@ impl InstructionType for Multiply {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
         Some(Instruction::Multiply(Self {
             condition,
-            accumulate: bit_is_set(raw, 21),
-            set_cpsr: bit_is_set(raw, 20),
+            accumulate: raw.bit_is_set(21),
+            set_cpsr: raw.bit_is_set(20),
             destination: RegisterNumber::extract(raw, 16),
             addend: RegisterNumber::extract(raw, 12),
             multiplicand1: RegisterNumber::extract(raw, 8),
@@ -486,9 +486,9 @@ impl InstructionType for MultiplyLong {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
         Some(Instruction::MultiplyLong(Self {
             condition,
-            signed: bit_is_set(raw, 22),
-            accumulate: bit_is_set(raw, 21),
-            set_cpsr: bit_is_set(raw, 20),
+            signed: raw.bit_is_set(22),
+            accumulate: raw.bit_is_set(21),
+            set_cpsr: raw.bit_is_set(20),
             destination_high: RegisterNumber::extract(raw, 16),
             destination_low: RegisterNumber::extract(raw, 12),
             multiplicand1: RegisterNumber::extract(raw, 8),
@@ -517,7 +517,7 @@ impl InstructionType for PsrRegisterTransfer {
         ((raw & 0x0FBF_0FFF) == 0x010F_0000)
             .then_some(Instruction::PsrRegisterTransfer(Self {
                 condition,
-                use_spsr: bit_is_set(raw, 22),
+                use_spsr: raw.bit_is_set(22),
                 destination: RegisterNumber::extract(raw, 12),
             }))
             .or_else(|| DataProcessing::decode(raw, condition))
@@ -548,11 +548,11 @@ pub struct RegisterPsrTransfer {
 
 impl InstructionType for RegisterPsrTransfer {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
-        let use_spsr = bit_is_set(raw, 22);
+        let use_spsr = raw.bit_is_set(22);
 
         // This instruction type overlaps with data processing in non-tabled bits.
         ((raw & 0x0FBF_FFF0) == 0x0129_F000 || (raw & 0x0DBF_F000) == 0x0128_F000)
-            .then_some(Instruction::RegisterPsrTransfer(if bit_is_set(raw, 16) {
+            .then_some(Instruction::RegisterPsrTransfer(if raw.bit_is_set(16) {
                 // Bit 16 indicates that the entire PSR should be transferred.
                 Self {
                     condition,
@@ -569,7 +569,7 @@ impl InstructionType for RegisterPsrTransfer {
                     condition,
                     use_spsr,
                     flags_only: true,
-                    source: if bit_is_set(raw, 25) {
+                    source: if raw.bit_is_set(25) {
                         DataOperand::decode_immediate(raw)
                     } else {
                         DataOperand::decode_register(raw)
@@ -606,7 +606,7 @@ impl InstructionType for SingleDataSwap {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
         Some(Instruction::SingleDataSwap(Self {
             condition,
-            swap_byte: bit_is_set(raw, 22),
+            swap_byte: raw.bit_is_set(22),
             address: RegisterNumber::extract(raw, 16),
             destination: RegisterNumber::extract(raw, 12),
             source: RegisterNumber::extract(raw, 0),
@@ -646,14 +646,14 @@ impl InstructionType for SingleDataTransfer {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
         Some(Instruction::SingleDataTransfer(Self {
             condition,
-            transfer_type: if bit_is_set(raw, 22) {
+            transfer_type: if raw.bit_is_set(22) {
                 SingleTransferType::UnsignedByte
             } else {
                 SingleTransferType::Word
             },
             opt: DataTransferOptions::decode(raw),
             target: RegisterNumber::extract(raw, 12),
-            offset: if bit_is_set(raw, 25) {
+            offset: if raw.bit_is_set(25) {
                 // Only immediate shifts are supported by this instruction.
                 let offset = DataOperand::decode_register(raw);
                 matches!(offset, DataOperand::ShiftImmediate(_, _, _)).then_some(offset)?
@@ -673,7 +673,7 @@ impl SingleDataTransfer {
     /// `DataProcessing` instructions in the decoding priority table.
     #[must_use]
     pub fn decode_alternate(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
-        let transfer_type = match (bit_is_set(raw, 6), bit_is_set(raw, 5)) {
+        let transfer_type = match (raw.bit_is_set(6), raw.bit_is_set(5)) {
             (true, true) => SingleTransferType::SignedHalfWord,
             (true, false) => SingleTransferType::SignedByte,
             (false, true) => SingleTransferType::UnsignedHalfWord,
@@ -685,7 +685,7 @@ impl SingleDataTransfer {
             transfer_type,
             opt: DataTransferOptions::decode(raw),
             target: RegisterNumber::extract(raw, 12),
-            offset: if bit_is_set(raw, 22) {
+            offset: if raw.bit_is_set(22) {
                 // Offset is an 8-bit immediate divided by the S and H bits.
                 DataOperand::Immediate(((raw >> 4) & 0xF0) | (raw & 0xF))
             } else {
@@ -754,8 +754,8 @@ impl Instruction {
     pub fn decode(raw: RawInstruction) -> Option<Self> {
         let condition = Condition::from_u32(raw >> 28)?;
         // Look up this instruction in the instruction type tables.
-        let l1_index = select_bits(raw, 20, 8) as usize;
-        let l2_offset = select_bits(raw, 4, 4) as usize;
+        let l1_index = raw.select_bits(20, 8) as usize;
+        let l2_offset = raw.select_bits(4, 4) as usize;
         DECODE_L2_TABLE[DECODE_L1_TABLE[l1_index] + l2_offset](raw, condition)
     }
 }

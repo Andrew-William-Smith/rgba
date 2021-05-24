@@ -1,5 +1,5 @@
 use crate::{
-    bit_twiddling::bit_is_set,
+    bit_twiddling::BitTwiddling,
     cpu::{
         instruction,
         instruction::{BlockTransferMode, DataOperand, ShiftType, SingleTransferType},
@@ -83,14 +83,14 @@ impl fmt::Display for DataOperand {
 
 /// Format the register list used in `BlockDataTransfer` instructions,
 /// expressing series of subsequent registers using interval notation.
-fn format_register_list(registers: u32) -> String {
+fn format_register_list(registers: u16) -> String {
     let mut intervals = Vec::new();
     let mut reg = 0;
     while reg < 16 {
         // Find the current register interval.
         let range_start = reg;
         let mut range_end = u8::MAX;
-        while reg < 16 && bit_is_set(registers, reg) {
+        while reg < 16 && registers.bit_is_set(reg) {
             range_end = reg;
             reg += 1;
         }
@@ -134,7 +134,7 @@ impl fmt::Display for instruction::BlockDataTransfer {
             suffix2,
             self.opt.base,
             write_suffix,
-            format_register_list(u32::from(self.registers)),
+            format_register_list(self.registers),
             mode_suffix
         )
     }
