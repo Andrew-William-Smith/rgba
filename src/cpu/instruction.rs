@@ -159,7 +159,7 @@ impl DataOperand {
     /// Decode an immediate data operand in the low 12 bits of the specified
     /// `spec`ification, as described for the `Immediate` variant.
     #[must_use]
-    fn decode_immediate(spec: u32) -> Self {
+    fn decode_immediate(spec: RawInstruction) -> Self {
         let value = spec & 0xFF;
         let rotation = spec.select_bits(8, 4) * 2;
         Self::Immediate(value.rotate_right(rotation))
@@ -174,7 +174,7 @@ impl DataOperand {
     /// this panic should not occur provided that the 4 variants defined by the
     /// ARM documentation are retained.
     #[must_use]
-    fn decode_register(spec: u32) -> Self {
+    fn decode_register(spec: RawInstruction) -> Self {
         let source_register = RegisterNumber::extract(spec, 0);
         let shift_type = ShiftType::from_u32(spec.select_bits(5, 2)).unwrap();
 
@@ -223,7 +223,7 @@ impl DataTransferOptions {
     /// Decode the common components of a data transfer operation.  No
     /// error checking is performed upon these values, so it is the
     /// responsibility of the caller to handle all validation.
-    fn decode(spec: u32) -> Self {
+    fn decode(spec: RawInstruction) -> Self {
         Self {
             pre_index: spec.bit_is_set(24),
             add_offset: spec.bit_is_set(23),
@@ -268,6 +268,44 @@ pub enum SingleTransferType {
     SignedHalfWord,
     /// Transfer a 32-bit value.
     Word,
+}
+
+/// A collection of instruction fields that are common to multiple types of
+/// coprocessor operations.  These fields are passed directly to the coprocessor
+/// and are not interpreted by the CPU past the decode stage.
+#[derive(Debug, Eq, PartialEq)]
+pub struct CoprocessorOptions {
+    /// An opcode (field `CP Opc`) specifying the specific operation to be
+    /// performed by the coprocessor.
+    pub operation: u8,
+    /// The coprocessor register `CRn` to be used as the first operand in the
+    /// requested coprocessor operation.
+    pub operand1: CoprocessorRegister,
+    /// The index of the coprocessor on which the operation should be executed.
+    /// All coprocessors other than that specified will ignore this instruction.
+    pub coprocessor: u8,
+    /// The field `CP` ("Coprocessor information"), which encodes some
+    /// additional information that may be considered in conjunction with
+    /// `CP Opc` to determine the operation to be performed.
+    pub info: u8,
+    /// The coprocessor register `CRm` to be used as the second operand in the
+    /// requested coprocessor operation.
+    pub operand2: CoprocessorRegister,
+}
+
+impl CoprocessorOptions {
+    /// Decode the common components of a coprocessor operation with the
+    /// specified `opcode`; the instruction must have already been validated as
+    /// a coprocessor operation for this function to generate sensible values.
+    fn decode(spec: RawInstruction, opcode: u8) -> Self {
+        Self {
+            operation: opcode,
+            operand1: CoprocessorRegister::extract(spec, 16),
+            coprocessor: spec.select_bits(8, 4) as u8,
+            info: spec.select_bits(5, 3) as u8,
+            operand2: CoprocessorRegister::extract(spec, 0),
+        }
+    }
 }
 
 /// A specific type of ARM instruction with a unique encoding scheme.
@@ -373,9 +411,37 @@ impl InstructionType for BranchAndExchange {
     }
 }
 
+/// An operation performed internally within a coprocessor; as such, these
+/// instructions do not reference any CPU state other than the CPSR in order to
+/// determine whether the instruction should be dispatched.
+#[derive(Debug, Eq, PartialEq)]
+pub struct CoprocessorDataOperation {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// Options set for this instruction that are common to multiple coprocessor
+    /// operation types.
+    pub opt: CoprocessorOptions,
+    /// The coprocessor register in which the result of the requested operation
+    /// should be stored by convention.
+    pub destination: CoprocessorRegister,
+}
+
+impl InstructionType for CoprocessorDataOperation {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        // These operations use a 4-bit opcode.
+        let opcode = raw.select_bits(20, 4) as u8;
+
+        Some(Instruction::CoprocessorDataOperation(Self {
+            condition,
+            opt: CoprocessorOptions::decode(raw, opcode),
+            destination: CoprocessorRegister::extract(raw, 12),
+        }))
+    }
+}
+
 /// A load or store of data between memory and a coprocessor's registers.  The
 /// exact amount of memory to be transferred is controlled by the coprocessor,
-/// which is passed a limited amount of data by the CPU.
+/// which is passed a limited amount of instruction data by the CPU.
 #[derive(Debug, Eq, PartialEq)]
 pub struct CoprocessorDataTransfer {
     /// The condition upon which this instruction will be executed.
@@ -774,6 +840,7 @@ pub enum Instruction {
     BlockDataTransfer(BlockDataTransfer),
     Branch(Branch),
     BranchAndExchange(BranchAndExchange),
+    CoprocessorDataOperation(CoprocessorDataOperation),
     CoprocessorDataTransfer(CoprocessorDataTransfer),
     DataProcessing(DataProcessing),
     Multiply(Multiply),

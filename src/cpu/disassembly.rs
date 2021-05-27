@@ -177,6 +177,28 @@ impl fmt::Display for instruction::BranchAndExchange {
     }
 }
 
+impl fmt::Display for instruction::CoprocessorDataOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let info_suffix = if self.opt.info == 0 {
+            "".to_owned()
+        } else {
+            format!(",{}", self.opt.info)
+        };
+
+        write!(
+            f,
+            "cdp{} p{},{},{},{},{}{}",
+            self.condition,
+            self.opt.coprocessor,
+            self.opt.operation,
+            self.destination,
+            self.opt.operand1,
+            self.opt.operand2,
+            info_suffix
+        )
+    }
+}
+
 impl fmt::Display for instruction::CoprocessorDataTransfer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mnemonic = if self.opt.load { "ldc" } else { "stc" };

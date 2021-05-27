@@ -108,6 +108,16 @@ fn branch_and_exchange() {
 }
 
 #[test]
+fn coprocessor_data_operation() {
+    decode_succeeds!(
+        CoprocessorDataOperation,
+        0xEE132004 => "cdp p0,1,c2,c3,c4" => CoprocessorDataOperation { condition: Always, opt: CoprocessorOptions { operation: 1, operand1: c(3), coprocessor: 0, info: 0, operand2: c(4) }, destination: c(2) },
+        0xEE1320A4 => "cdp p0,1,c2,c3,c4,5" => CoprocessorDataOperation { condition: Always, opt: CoprocessorOptions { operation: 1, operand1: c(3), coprocessor: 0, info: 5, operand2: c(4) }, destination: c(2) },
+        0x2EFDCFEE => "cdpcs p15,15,c12,c13,c14,7" => CoprocessorDataOperation { condition: HigherOrSame, opt: CoprocessorOptions { operation: 15, operand1: c(13), coprocessor: 15, info: 7, operand2: c(14) }, destination: c(12) },
+    );
+}
+
+#[test]
 fn coprocessor_data_transfer() {
     use DataOperand::*;
 
