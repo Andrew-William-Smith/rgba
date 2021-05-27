@@ -138,6 +138,20 @@ fn coprocessor_data_transfer() {
 }
 
 #[test]
+fn coprocessor_register_transfer() {
+    decode_succeeds!(
+        CoprocessorRegisterTransfer,
+        // Example instructions copied directly from the ARM ISA documentation.
+        0xEEB53216 => "mrc p2,5,r3,c5,c6" => CoprocessorRegisterTransfer { condition: Always, opt: CoprocessorOptions { operation: 5, operand1: c(5), coprocessor: 2, info: 0, operand2: c(6) }, load: true, target: r(3) },
+        0xEE054616 => "mcr p6,0,r4,c5,c6" => CoprocessorRegisterTransfer { condition: Always, opt: CoprocessorOptions { operation: 0, operand1: c(5), coprocessor: 6, info: 0, operand2: c(6) }, load: false, target: r(4) },
+        0x0EF53356 => "mrceq p3,7,r3,c5,c6,2" => CoprocessorRegisterTransfer { condition: Equal, opt: CoprocessorOptions { operation: 7, operand1: c(5), coprocessor: 3, info: 2, operand2: c(6) }, load: true, target: r(3) },
+        // On loads, r15 encodes to cpsr_flg; on stores, it remains as the program counter.
+        0xEE74F2D5 => "mrc p2,3,cpsr_flg,c4,c5,6" => CoprocessorRegisterTransfer { condition: Always, opt: CoprocessorOptions { operation: 3, operand1: c(4), coprocessor: 2, info: 6, operand2: c(5) }, load: true, target: r(15) },
+        0xEE64F2D5 => "mcr p2,3,pc,c4,c5,6" => CoprocessorRegisterTransfer { condition: Always, opt: CoprocessorOptions { operation: 3, operand1: c(4), coprocessor: 2, info: 6, operand2: c(5) }, load: false, target: r(15) },
+    );
+}
+
+#[test]
 fn data_processing() {
     // Include some enums so these lines don't get too long.
     use ArithmeticOperation::*;

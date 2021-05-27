@@ -179,11 +179,8 @@ impl fmt::Display for instruction::BranchAndExchange {
 
 impl fmt::Display for instruction::CoprocessorDataOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let info_suffix = if self.opt.info == 0 {
-            "".to_owned()
-        } else {
-            format!(",{}", self.opt.info)
-        };
+        let own_suffix = format!(",{}", self.opt.info);
+        let info_suffix = optional_field(self.opt.info != 0, &*own_suffix);
 
         write!(
             f,
@@ -209,6 +206,33 @@ impl fmt::Display for instruction::CoprocessorDataTransfer {
             f,
             "{}{}{} p{},{},{}",
             mnemonic, self.condition, length_suffix, self.coprocessor, self.target, address
+        )
+    }
+}
+
+impl fmt::Display for instruction::CoprocessorRegisterTransfer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mnemonic = if self.load { "mrc" } else { "mcr" };
+        let target_name = if self.target.0 == 15 && self.load {
+            "cpsr_flg".to_owned()
+        } else {
+            self.target.to_string()
+        };
+
+        let own_suffix = format!(",{}", self.opt.info);
+        let info_suffix = optional_field(self.opt.info != 0, &*own_suffix);
+
+        write!(
+            f,
+            "{}{} p{},{},{},{},{}{}",
+            mnemonic,
+            self.condition,
+            self.opt.coprocessor,
+            self.opt.operation,
+            target_name,
+            self.opt.operand1,
+            self.opt.operand2,
+            info_suffix
         )
     }
 }

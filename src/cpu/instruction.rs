@@ -428,7 +428,7 @@ pub struct CoprocessorDataOperation {
 
 impl InstructionType for CoprocessorDataOperation {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
-        // These operations use a 4-bit opcode.
+        // These operations use a complete 4-bit primary opcode.
         let opcode = raw.select_bits(20, 4) as u8;
 
         Some(Instruction::CoprocessorDataOperation(Self {
@@ -475,6 +475,43 @@ impl InstructionType for CoprocessorDataTransfer {
             target: CoprocessorRegister::extract(raw, 12),
             coprocessor: raw.select_bits(8, 4) as u8,
             offset: DataOperand::Immediate((raw & 0xFF) << 2),
+        }))
+    }
+}
+
+/// A direct transfer between a coprocessor register and a CPU register, which
+/// may include the flag bits in the CPSR.
+#[derive(Debug, Eq, PartialEq)]
+pub struct CoprocessorRegisterTransfer {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// Options set for this instruction that are common to multiple coprocessor
+    /// operation types.
+    pub opt: CoprocessorOptions,
+    /// Whether this operation is a load from a coprocessor to the CPU (`true`,
+    /// mnemonic `mrc`) or a store from the CPU to a coprocessor (`false`,
+    /// mnemonic `mcr`).
+    pub load: bool,
+    /// Either the register from which to source the value to write for a store
+    /// or into which to read the value of a load, depending on the type of
+    /// operation being performed.  If this register is `r15` (`pc`) and the
+    /// specified operation is a load, then the flags of the CPSR (`cpsr_flg`)
+    /// are transferred and all other bits, as well as the program counter, are
+    /// unaffected; stores simply transfer the value of `r15`, plus a pipeline
+    /// offset of 12.
+    pub target: RegisterNumber,
+}
+
+impl InstructionType for CoprocessorRegisterTransfer {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        // These operations use only a 3-bit primary opcode.
+        let opcode = raw.select_bits(21, 3) as u8;
+
+        Some(Instruction::CoprocessorRegisterTransfer(Self {
+            condition,
+            opt: CoprocessorOptions::decode(raw, opcode),
+            load: raw.bit_is_set(20),
+            target: RegisterNumber::extract(raw, 12),
         }))
     }
 }
@@ -842,6 +879,7 @@ pub enum Instruction {
     BranchAndExchange(BranchAndExchange),
     CoprocessorDataOperation(CoprocessorDataOperation),
     CoprocessorDataTransfer(CoprocessorDataTransfer),
+    CoprocessorRegisterTransfer(CoprocessorRegisterTransfer),
     DataProcessing(DataProcessing),
     Multiply(Multiply),
     MultiplyLong(MultiplyLong),

@@ -16,7 +16,7 @@ use std::{
 /// callback in the `cpu::instruction` module that should be called to decode
 /// the instruction type.
 #[rustfmt::skip]
-const ENCODING_SELECT: [(usize, usize, &str); 15] = [
+const ENCODING_SELECT: [(usize, usize, &str); 16] = [
     (0b1100_0000_0000, 0b0000_0000_0000, "DataProcessing::decode"),
     (0b1111_1011_1111, 0b0001_0000_0000, "PsrRegisterTransfer::decode"),
     (0b1101_1011_1111, 0b0001_0010_0000, "RegisterPsrTransfer::decode"),
@@ -31,7 +31,7 @@ const ENCODING_SELECT: [(usize, usize, &str); 15] = [
     (0b1110_0000_0000, 0b1010_0000_0000, "Branch::decode"),
     (0b1110_0000_0000, 0b1100_0000_0000, "CoprocessorDataTransfer::decode"),
     (0b1111_0000_0001, 0b1110_0000_0000, "CoprocessorDataOperation::decode"),
-    // 0b1111_0000_0001, 0b1110_0000_0001 -> Coprocessor Register Transfer
+    (0b1111_0000_0001, 0b1110_0000_0001, "CoprocessorRegisterTransfer::decode"),
     (0b1111_0000_0000, 0b1111_0000_0000, "SoftwareInterrupt::decode"),
 ];
 
