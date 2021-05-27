@@ -1,9 +1,14 @@
 use crate::decode_succeeds;
-use rgba::cpu::{instruction::*, RegisterNumber};
+use rgba::cpu::{instruction::*, CoprocessorRegister, RegisterNumber};
 
 /// Shorthand for defining a register number, since we use them **everywhere**.
 const fn r(number: u8) -> RegisterNumber {
     RegisterNumber(number)
+}
+
+/// Shorthand for defining a coprocessor register number.
+const fn c(number: u8) -> CoprocessorRegister {
+    CoprocessorRegister(number)
 }
 
 /// Assert that the condition of each decoded instructions matches the expected
@@ -99,6 +104,26 @@ fn branch_and_exchange() {
         0xE12FFF10 => "bx r0" => BranchAndExchange { condition: Always, source: r(0) },
         0x212FFF17 => "bxcs r7" => BranchAndExchange { condition: HigherOrSame, source: r(7) },
         0xD12FFF1A => "bxle r10" => BranchAndExchange { condition: LessOrEqual, source: r(10) },
+    );
+}
+
+#[test]
+fn coprocessor_data_transfer() {
+    use DataOperand::*;
+
+    decode_succeeds!(
+        CoprocessorDataTransfer,
+        // All variations of mnemonics.
+        0xED932100 => "ldc p1,c2,[r3]" => CoprocessorDataTransfer { condition: Always, transfer_length: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(3) }, target: c(2), coprocessor: 1, offset: Immediate(0) },
+        0xEDD32100 => "ldcl p1,c2,[r3]" => CoprocessorDataTransfer { condition: Always, transfer_length: true, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(3) }, target: c(2), coprocessor: 1, offset: Immediate(0) },
+        0xED832100 => "stc p1,c2,[r3]" => CoprocessorDataTransfer { condition: Always, transfer_length: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: false, base: r(3) }, target: c(2), coprocessor: 1, offset: Immediate(0) },
+        0xEDC32100 => "stcl p1,c2,[r3]" => CoprocessorDataTransfer { condition: Always, transfer_length: true, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: false, base: r(3) }, target: c(2), coprocessor: 1, offset: Immediate(0) },
+        // Various addressing modes.
+        0xED998789 => "ldc p7,c8,[r9,#+0x224]" => CoprocessorDataTransfer { condition: Always, transfer_length: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: false, load: true, base: r(9) }, target: c(8), coprocessor: 7, offset: Immediate(0x224) },
+        0xED198789 => "ldc p7,c8,[r9,#-0x224]" => CoprocessorDataTransfer { condition: Always, transfer_length: false, opt: DataTransferOptions { pre_index: true, add_offset: false, write_back: false, load: true, base: r(9) }, target: c(8), coprocessor: 7, offset: Immediate(0x224) },
+        0xEDB98789 => "ldc p7,c8,[r9,#+0x224]!" => CoprocessorDataTransfer { condition: Always, transfer_length: false, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: true, load: true, base: r(9) }, target: c(8), coprocessor: 7, offset: Immediate(0x224) },
+        0xEC398789 => "ldc p7,c8,[r9],#-0x224" => CoprocessorDataTransfer { condition: Always, transfer_length: false, opt: DataTransferOptions { pre_index: false, add_offset: false, write_back: true, load: true, base: r(9) }, target: c(8), coprocessor: 7, offset: Immediate(0x224) },
+        0x0DE210FF => "stceql p0,c1,[r2,#+0x3FC]!" => CoprocessorDataTransfer { condition: Equal, transfer_length: true, opt: DataTransferOptions { pre_index: true, add_offset: true, write_back: true, load: false, base: r(2) }, target: c(1), coprocessor: 0, offset: Immediate(0x3FC) },
     );
 }
 

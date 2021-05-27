@@ -9,13 +9,26 @@ pub type Address = u32;
 /// An offset from an `Address`, equivalent to a `ptrdiff_t`.
 pub type AddressOffset = i32;
 
+/// A coprocessor register number, nominally restricted to the range `[0, 15]`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct CoprocessorRegister(pub u8);
+
+impl CoprocessorRegister {
+    /// Extract a coprocessor register number beginning at the specified
+    /// `low_bit` index in the specified `instruction`.
+    #[must_use]
+    pub fn extract(instruction: u32, low_bit: u8) -> Self {
+        Self(instruction.select_bits(low_bit, 4) as u8)
+    }
+}
+
 /// A register number, nominally restricted to the range `[0, 15]`.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct RegisterNumber(pub u8);
 
 impl RegisterNumber {
     /// Extract a register number beginning at the specified `low_bit` index in
-    /// the specified `instruction` to a register number.
+    /// the specified `instruction`.
     #[must_use]
     pub fn extract(instruction: u32, low_bit: u8) -> Self {
         Self(instruction.select_bits(low_bit, 4) as u8)

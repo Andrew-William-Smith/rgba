@@ -2,8 +2,8 @@ use crate::{
     bit_twiddling::BitTwiddling,
     cpu::{
         instruction,
-        instruction::{BlockTransferMode, DataOperand, ShiftType, SingleTransferType},
-        RegisterNumber,
+        instruction::{BlockTransferMode, DataOperand, DataTransferOptions, ShiftType, SingleTransferType},
+        CoprocessorRegister, RegisterNumber,
     },
 };
 use std::fmt;
@@ -24,10 +24,15 @@ const REGISTER_NAMES: [&str; 16] = [
     "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "sp", "lr", "pc",
 ];
 
-/// Get the human-readable name of the register with the specified `number`.
 impl fmt::Display for RegisterNumber {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", REGISTER_NAMES[self.0 as usize])
+    }
+}
+
+impl fmt::Display for CoprocessorRegister {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "c{}", self.0)
     }
 }
 
@@ -108,6 +113,25 @@ fn format_register_list(registers: u16) -> String {
     intervals.join(",")
 }
 
+/// Format the representation of a memory address as a signed offset from the
+/// value stored in a register.  The `options` and `offset` read by this
+/// function must be read from a data-transfer operation.
+fn format_signed_address(options: &DataTransferOptions, offset: &DataOperand) -> String {
+    let offset_sign = if options.add_offset { '+' } else { '-' };
+    let offset_repr = match offset {
+        DataOperand::Immediate(0) => "".to_owned(),
+        DataOperand::Immediate(off) => format!(",#{}{:#X}", offset_sign, off),
+        _ => format!(",{}{}", offset_sign, offset),
+    };
+    let write_suffix = optional_field(options.write_back, "!");
+
+    if options.pre_index {
+        format!("[{}{}]{}", options.base, offset_repr, write_suffix)
+    } else {
+        format!("[{}]{}", options.base, offset_repr)
+    }
+}
+
 impl fmt::Display for instruction::BlockDataTransfer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mnemonic = if self.opt.load { "ldm" } else { "stm" };
@@ -150,6 +174,20 @@ impl fmt::Display for instruction::Branch {
 impl fmt::Display for instruction::BranchAndExchange {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "bx{} {}", self.condition, self.source)
+    }
+}
+
+impl fmt::Display for instruction::CoprocessorDataTransfer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mnemonic = if self.opt.load { "ldc" } else { "stc" };
+        let length_suffix = optional_field(self.transfer_length, "l");
+        let address = format_signed_address(&self.opt, &self.offset);
+
+        write!(
+            f,
+            "{}{}{} p{},{},{}",
+            mnemonic, self.condition, length_suffix, self.coprocessor, self.target, address
+        )
     }
 }
 
@@ -248,8 +286,7 @@ impl fmt::Display for instruction::SingleDataTransfer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mnemonic = if self.opt.load { "ldr" } else { "str" };
         let user_suffix = optional_field(!self.opt.pre_index && self.opt.write_back, "t");
-        let write_suffix = optional_field(self.opt.write_back, "!");
-        let offset_sign = if self.opt.add_offset { '+' } else { '-' };
+        let address = format_signed_address(&self.opt, &self.offset);
 
         let size_suffix = match self.transfer_type {
             SingleTransferType::UnsignedByte => "b",
@@ -257,20 +294,6 @@ impl fmt::Display for instruction::SingleDataTransfer {
             SingleTransferType::UnsignedHalfWord => "h",
             SingleTransferType::SignedHalfWord => "sh",
             SingleTransferType::Word => "",
-        };
-
-        let address = match &self.offset {
-            DataOperand::Immediate(0) => format!("[{}]", self.opt.base),
-            DataOperand::Immediate(offset) if self.opt.pre_index => {
-                format!("[{},#{}{:#X}]{}", self.opt.base, offset_sign, offset, write_suffix)
-            }
-            shift_operand if self.opt.pre_index => {
-                format!("[{},{}{}]{}", self.opt.base, offset_sign, shift_operand, write_suffix)
-            }
-            DataOperand::Immediate(offset) => {
-                format!("[{}],#{}{:#X}", self.opt.base, offset_sign, offset)
-            }
-            shift_operand => format!("[{}],{}{}", self.opt.base, offset_sign, shift_operand),
         };
 
         write!(

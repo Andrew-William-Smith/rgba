@@ -1,6 +1,6 @@
 use crate::{
     bit_twiddling::BitTwiddling,
-    cpu::{AddressOffset, RegisterNumber},
+    cpu::{AddressOffset, CoprocessorRegister, RegisterNumber},
 };
 use derive_more::Display;
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -373,6 +373,46 @@ impl InstructionType for BranchAndExchange {
     }
 }
 
+/// A load or store of data between memory and a coprocessor's registers.  The
+/// exact amount of memory to be transferred is controlled by the coprocessor,
+/// which is passed a limited amount of data by the CPU.
+#[derive(Debug, Eq, PartialEq)]
+pub struct CoprocessorDataTransfer {
+    /// The condition upon which this instruction will be executed.
+    pub condition: Condition,
+    /// The value of the `N` bit, which is intended for use by coprocessors to
+    /// determine the amount of memory to be transferred.  Regardless of its
+    /// use, this field is not interpreted by the CPU.
+    pub transfer_length: bool,
+    /// Options set for this instruction that are common to all memory transfer
+    /// operations.
+    pub opt: DataTransferOptions,
+    /// The coprocessor register `CRd` that serves as either the destination
+    /// (load) or source (store) of the data transfer.
+    pub target: CoprocessorRegister,
+    /// The number of the coprocessor targeted by this operation.  Only the
+    /// coprocessor with the specified index should respond to this instruction.
+    pub coprocessor: u8,
+    /// The offset to be added to or subtracted from the value of the base
+    /// register to obtain the memory address at which this operation should
+    /// occur.  For this instruction, the offset will always be `Immediate` and
+    /// its value will be shifted left by 2 bits during decoding.
+    pub offset: DataOperand,
+}
+
+impl InstructionType for CoprocessorDataTransfer {
+    fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
+        Some(Instruction::CoprocessorDataTransfer(Self {
+            condition,
+            transfer_length: raw.bit_is_set(22),
+            opt: DataTransferOptions::decode(raw),
+            target: CoprocessorRegister::extract(raw, 12),
+            coprocessor: raw.select_bits(8, 4) as u8,
+            offset: DataOperand::Immediate((raw & 0xFF) << 2),
+        }))
+    }
+}
+
 /// A data processing operation, comprising most ARM instructions that utilise
 /// the ALU.
 #[derive(Debug, Eq, PartialEq)]
@@ -734,6 +774,7 @@ pub enum Instruction {
     BlockDataTransfer(BlockDataTransfer),
     Branch(Branch),
     BranchAndExchange(BranchAndExchange),
+    CoprocessorDataTransfer(CoprocessorDataTransfer),
     DataProcessing(DataProcessing),
     Multiply(Multiply),
     MultiplyLong(MultiplyLong),
