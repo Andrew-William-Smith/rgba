@@ -31,6 +31,10 @@ define_swap_signedness!(isize, usize);
 
 /// A wrapper trait for various bit-twiddling operations on unsigned integers.
 pub trait BitTwiddling<TIndex: AsPrimitive<usize>>: SwapSignedness + AsPrimitive<Self::Signed> {
+    /// Generate an integral value containing the bit at the specified `index`,
+    /// `set` to `0` or `1` according to the specified value.
+    fn bit(index: TIndex, set: bool) -> Self;
+
     /// Determine whether the bit at the specified `index`, counted from the
     /// least significant bit, is set in this integral value.
     fn bit_is_set(self, index: TIndex) -> bool;
@@ -57,6 +61,10 @@ where
     T: SwapSignedness + AsPrimitive<T::Signed>,
     TIndex: AsPrimitive<usize>,
 {
+    fn bit(index: TIndex, set: bool) -> T {
+        (if set { T::one() } else { T::zero() }) << index.as_()
+    }
+
     fn bit_is_set(self, index: TIndex) -> bool {
         self & (T::one() << index.as_()) != T::zero()
     }
