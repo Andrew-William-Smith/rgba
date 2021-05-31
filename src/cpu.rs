@@ -108,16 +108,18 @@ impl TryFrom<u32> for StatusRegister {
     type Error = &'static str;
 
     fn try_from(raw: u32) -> Result<Self, Self::Error> {
-        Ok(Self {
-            mode: Mode::from_u32(raw & 0x1F).ok_or("Invalid mode in loaded status register")?,
-            thumb: raw.bit_is_set(5),
-            fiq_disable: raw.bit_is_set(6),
-            irq_disable: raw.bit_is_set(7),
-            flag_overflow: raw.bit_is_set(28),
-            flag_carry: raw.bit_is_set(29),
-            flag_zero: raw.bit_is_set(30),
-            flag_negative: raw.bit_is_set(31),
-        })
+        Mode::from_u32(raw & 0x1F)
+            .ok_or("Invalid mode read into PSR")
+            .map(|mode| Self {
+                mode,
+                thumb: raw.bit_is_set(5),
+                fiq_disable: raw.bit_is_set(6),
+                irq_disable: raw.bit_is_set(7),
+                flag_overflow: raw.bit_is_set(28),
+                flag_carry: raw.bit_is_set(29),
+                flag_zero: raw.bit_is_set(30),
+                flag_negative: raw.bit_is_set(31),
+            })
     }
 }
 

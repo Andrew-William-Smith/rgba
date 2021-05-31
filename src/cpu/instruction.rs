@@ -540,18 +540,20 @@ pub struct DataProcessing {
 
 impl InstructionType for DataProcessing {
     fn decode(raw: RawInstruction, condition: Condition) -> Option<Instruction> {
-        Some(Instruction::DataProcessing(Self {
-            condition,
-            operation: ArithmeticOperation::from_u32(raw.select_bits(21, 4))?,
-            set_cpsr: raw.bit_is_set(20),
-            operand1: RegisterNumber::extract(raw, 16),
-            destination: RegisterNumber::extract(raw, 12),
-            operand2: if raw.bit_is_set(25) {
-                DataOperand::decode_immediate(raw)
-            } else {
-                DataOperand::decode_register(raw)
-            },
-        }))
+        ArithmeticOperation::from_u32(raw.select_bits(21, 4)).map(|operation| {
+            Instruction::DataProcessing(Self {
+                condition,
+                operation,
+                set_cpsr: raw.bit_is_set(20),
+                operand1: RegisterNumber::extract(raw, 16),
+                destination: RegisterNumber::extract(raw, 12),
+                operand2: if raw.bit_is_set(25) {
+                    DataOperand::decode_immediate(raw)
+                } else {
+                    DataOperand::decode_register(raw)
+                },
+            })
+        })
     }
 }
 
