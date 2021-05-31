@@ -2,7 +2,7 @@ use crate::{
     bit_twiddling::BitTwiddling,
     cpu::{
         instruction,
-        instruction::{BlockTransferMode, DataOperand, DataTransferOptions, ShiftType, SingleTransferType},
+        instruction::{BlockTransferMode, DataOperand, DataTransferOptions, ShiftType},
         CoprocessorRegister, RegisterNumber,
     },
 };
@@ -36,31 +36,6 @@ impl fmt::Display for CoprocessorRegister {
     }
 }
 
-/// The Assembly mnemonics used for each execution `Condition`.
-const CONDITION_MNEMONICS: [&str; 15] = [
-    "eq", "ne", "cs", "cc", "mi", "pl", "vs", "vc", "hi", "ls", "ge", "lt", "gt", "le", "",
-];
-
-impl fmt::Display for instruction::Condition {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", CONDITION_MNEMONICS[*self as usize])
-    }
-}
-
-/// The Assembly mnemonics used for each `ArithmeticOperation`.
-const ARITHMETIC_OPERATION_MNEMONICS: [&str; 16] = [
-    "and", "eor", "sub", "rsb", "add", "adc", "sbc", "rsc", "tst", "teq", "cmp", "cmn", "orr", "mov", "bic", "mvn",
-];
-
-impl fmt::Display for instruction::ArithmeticOperation {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", ARITHMETIC_OPERATION_MNEMONICS[*self as usize])
-    }
-}
-
-/// The Assembly mnemonics used for each register `ShiftType`.
-const SHIFT_TYPE_MNEMONICS: [&str; 4] = ["lsl", "lsr", "asr", "ror"];
-
 impl fmt::Display for DataOperand {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -73,14 +48,12 @@ impl fmt::Display for DataOperand {
                     // "lsl #0" is a no-op, so we don't need to disassemble it at all.
                     "".to_owned()
                 } else {
-                    let mnemonic = SHIFT_TYPE_MNEMONICS[shift_type as usize];
-                    format!(",{} #{}", mnemonic, shift_amount)
+                    format!(",{} #{}", shift_type, shift_amount)
                 };
                 write!(f, "{}{}", source, shift)
             }
             Self::ShiftRegister(shift_type, shift_register, source) => {
-                let shift_mnemonic = SHIFT_TYPE_MNEMONICS[shift_type as usize];
-                write!(f, "{},{} {}", source, shift_mnemonic, shift_register)
+                write!(f, "{},{} {}", source, shift_type, shift_register)
             }
         }
     }
@@ -334,18 +307,10 @@ impl fmt::Display for instruction::SingleDataTransfer {
         let user_suffix = optional_field(!self.opt.pre_index && self.opt.write_back, "t");
         let address = format_signed_address(&self.opt, &self.offset);
 
-        let size_suffix = match self.transfer_type {
-            SingleTransferType::UnsignedByte => "b",
-            SingleTransferType::SignedByte => "sb",
-            SingleTransferType::UnsignedHalfWord => "h",
-            SingleTransferType::SignedHalfWord => "sh",
-            SingleTransferType::Word => "",
-        };
-
         write!(
             f,
             "{}{}{}{} {},{}",
-            mnemonic, self.condition, size_suffix, user_suffix, self.target, address
+            mnemonic, self.condition, self.transfer_type, user_suffix, self.target, address
         )
     }
 }

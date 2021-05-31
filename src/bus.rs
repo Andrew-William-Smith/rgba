@@ -48,7 +48,7 @@ impl Bus {
     /// # Errors
     /// - `BusError::InvalidAddress` if either byte of the half word is outside
     ///   the range handled by any device on the bus.
-    fn read_half_word(&self, address: Address) -> Result<u16, BusError> {
+    pub fn read_half_word(&self, address: Address) -> Result<u16, BusError> {
         let low_byte = self.read(address)? as u16;
         let high_byte = self.read(address + 1)? as u16;
         Ok((high_byte << 8) | low_byte)
@@ -60,7 +60,7 @@ impl Bus {
     /// # Errors
     /// - `BusError::InvalidAddress` if any byte of the word is outside the
     ///   range handled by any device on the bus.
-    fn read_word(&self, address: Address) -> Result<u32, BusError> {
+    pub fn read_word(&self, address: Address) -> Result<u32, BusError> {
         let byte0 = self.read(address)? as u32;
         let byte1 = self.read(address + 1)? as u32;
         let byte2 = self.read(address + 2)? as u32;

@@ -1,8 +1,10 @@
 use crate::bit_twiddling::BitTwiddling;
+use derive_more::Display;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use std::{
     convert::TryFrom,
+    fmt,
     ops::{Index, IndexMut},
 };
 
@@ -43,7 +45,7 @@ impl RegisterNumber {
 
 /// The operating mode of the ARM7TDMI CPU.  All modes other than `User` are
 /// privileged and thus can execute privileged instructions.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Copy, Clone, Debug, Display, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
 pub enum Mode {
     /// The standard mode of execution; this mode is unprivileged.
@@ -68,6 +70,7 @@ pub enum Mode {
 /// substantially more frequently than the registers as a whole, the program
 /// status is not stored as a bit-field as documented, but can be synthesised
 /// to a 32-bit register if necessary.
+#[derive(Copy, Clone)]
 pub struct StatusRegister {
     /// The current operating mode of the CPU; bits `M0`&ndash;`M4` of the PSR.
     pub mode: Mode,
@@ -91,8 +94,27 @@ pub struct StatusRegister {
     pub flag_negative: bool,
 }
 
-impl From<StatusRegister> for u32 {
-    fn from(register: StatusRegister) -> Self {
+impl fmt::Display for StatusRegister {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:08X} [N={} Z={} C={} V={} I={} F={} T={} M={:05b}/{}]",
+            u32::from(self),
+            self.flag_negative as u8,
+            self.flag_zero as u8,
+            self.flag_carry as u8,
+            self.flag_overflow as u8,
+            self.irq_disable as u8,
+            self.fiq_disable as u8,
+            self.thumb as u8,
+            self.mode as u8,
+            self.mode,
+        )
+    }
+}
+
+impl From<&StatusRegister> for u32 {
+    fn from(register: &StatusRegister) -> Self {
         u32::bit(31, register.flag_negative)
             | u32::bit(30, register.flag_zero)
             | u32::bit(29, register.flag_carry)
@@ -140,7 +162,7 @@ pub struct Cpu {
     /// store the value of the CPSR prior to a mode switch, are stored in
     /// subsequent indices in the following order: `FastInterrupt`, `Interrupt`,
     /// `Supervisor`, `Abort`, and `Undefined`.
-    pub status: [StatusRegister; 6],
+    status: [StatusRegister; 6],
 }
 
 impl Cpu {
@@ -160,6 +182,74 @@ impl Cpu {
             Mode::Undefined => raw_idx + 17,
             _ => raw_idx,
         }
+    }
+
+    /// Compute the index of the SPSR for the current mode in the `status` field
+    /// of the CPU.
+    fn mode_index(&self) -> usize {
+        match self.cpsr().mode {
+            Mode::FastInterrupt => 1,
+            Mode::Interrupt => 2,
+            Mode::Supervisor => 3,
+            Mode::Abort => 4,
+            Mode::Undefined => 5,
+            _ => 0,
+        }
+    }
+
+    /// Retrieve a reference to the Current Program Status Register (CPSR),
+    /// which stores some auxiliary processor state (flags, operating mode,
+    /// etc.) for the current mode.
+    #[must_use]
+    pub fn cpsr(&self) -> &StatusRegister {
+        &self.status[0]
+    }
+
+    /// Retrieve a reference to the Saved Program Status Register (SPSR), which
+    /// stores the value of the CPSR prior to the switch to the current mode.
+    /// System and User modes do not have an SPSR defined, so the CPSR will be
+    /// returned if the CPU is in either of those modes.
+    #[must_use]
+    pub fn spsr(&self) -> &StatusRegister {
+        &self.status[self.mode_index()]
+    }
+}
+
+impl Default for Cpu {
+    /// Create a new instance of the CPU in its default state upon boot.  The
+    /// CPU boots in ARM mode with both FIQ and IRQ disabled, and it is placed
+    /// in Supervisor mode by default.
+    fn default() -> Self {
+        Self {
+            // All registers, including the program counter, are set to 0 by default.
+            registers: [0; 31],
+            status: [StatusRegister {
+                mode: Mode::Supervisor,
+                thumb: false,
+                fiq_disable: true,
+                irq_disable: true,
+                flag_overflow: false,
+                flag_carry: false,
+                flag_zero: false,
+                flag_negative: false,
+            }; 6],
+        }
+    }
+}
+
+impl fmt::Display for Cpu {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for i in 0..=15 {
+            // Write the separator character: 4 registers per line.
+            if i != 0 {
+                write!(f, "{}", if i % 4 == 0 { '\n' } else { ' ' })?;
+            }
+
+            let register = RegisterNumber(i);
+            write!(f, "{:3}={:08X}", register.to_string(), self[register])?;
+        }
+
+        writeln!(f, "\ncpsr={}\nspsr={}", self.cpsr(), self.spsr())
     }
 }
 

@@ -15,38 +15,53 @@ pub type RawInstruction = u32;
 /// ARM-mode instructions are subject to conditional execution dependent upon
 /// the states of the flags in the CPSR; the specific condition to apply is
 /// encoded in the uppermost 4 bits of each instruction (`31:28`).
-#[derive(Copy, Clone, Debug, Eq, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Copy, Clone, Debug, Display, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
 pub enum Condition {
     /// Values are equal (`Z` flag set, suffix `eq`).
+    #[display(fmt = "eq")]
     Equal,
     /// Values are not equal (`Z` flag clear, suffix `ne`).
+    #[display(fmt = "ne")]
     NotEqual,
     /// Unsigned greater than or equal (`C` flag set, suffix `cs`).
+    #[display(fmt = "cs")]
     HigherOrSame,
     /// Unsigned less than (`C` flag clear, suffix `cc`).
+    #[display(fmt = "cc")]
     Lower,
     /// Value is negative (`N` flag set, suffix `mi`).
+    #[display(fmt = "mi")]
     Negative,
     /// Value is non-negative (`N` flag clear, suffix `pl`).
+    #[display(fmt = "pl")]
     NonNegative,
     /// Signed operation overflowed (`V` flag set, suffix `vs`).
+    #[display(fmt = "vs")]
     Overflow,
     /// Signed operation did not overflow (`V` flag clear, suffix `vc`).
+    #[display(fmt = "vc")]
     NoOverflow,
     /// Unsigned greater than (`C` set and `Z` clear, suffix `hi`).
+    #[display(fmt = "hi")]
     Higher,
     /// Unsigned less than or equal (`C` clear or `Z` set, suffix `ls`).
+    #[display(fmt = "ls")]
     LowerOrSame,
     /// Signed greater than or equal (`N == V`, suffix `ge`).
+    #[display(fmt = "ge")]
     GreaterOrEqual,
     /// Signed less than (`N != V`, suffix `lt`).
+    #[display(fmt = "lt")]
     Less,
     /// Signed greater than (`Z` flag clear and `N == V`, suffix `gt`).
+    #[display(fmt = "gt")]
     Greater,
     /// Signed less than or equal (`Z` flag set or `N != V`, suffix `le`).
+    #[display(fmt = "le")]
     LessOrEqual,
-    /// Execute unconditionally (suffix `al`).
+    /// Execute unconditionally (suffix `al`, or no suffix).
+    #[display(fmt = "")]
     Always,
 }
 
@@ -60,46 +75,62 @@ const fn decode_undefined(_raw: RawInstruction, _condition: Condition) -> Option
 
 /// The operations permissible in the `OpCode` field of an arithmetic (data
 /// processing) instruction.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Copy, Clone, Debug, Display, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
 pub enum ArithmeticOperation {
     /// `Rd := Op1 AND Op2`; mnemonic `and`.
+    #[display(fmt = "and")]
     And,
     /// `Rd := Op1 XOR Op2`; mnemonic `eor`.
+    #[display(fmt = "eor")]
     ExclusiveOr,
     /// `Rd := Op1 - Op2`; mnemonic `sub`.
+    #[display(fmt = "sub")]
     Subtract,
     /// `Rd := Op2 - Op1`; mnemonic `rsb`.
+    #[display(fmt = "rsb")]
     ReverseSubtract,
     /// `Rd := Op1 + Op2`; mnemonic `add`.
+    #[display(fmt = "add")]
     Add,
     /// `Rd := Op1 + Op2 + C`; mnemonic `adc`.
+    #[display(fmt = "adc")]
     AddWithCarry,
     /// `Rd := Op1 - Op2 + C - 1`; mnemonic `sbc`.
+    #[display(fmt = "sbc")]
     SubtractWithCarry,
     /// `Rd := Op2 - Op1 + C - 1`; mnemonic `rsc`.
+    #[display(fmt = "rsc")]
     ReverseSubtractWithCarry,
     /// Set condition codes on `Op1 AND Op2`; mnemonic `tst`.
+    #[display(fmt = "tst")]
     Test,
     /// Set condition codes on `Op1 XOR Op2`; mnemonic `teq`.
+    #[display(fmt = "teq")]
     TestEqual,
     /// Set condition codes on `Op1 - Op2`; mnemonic `cmp`.
+    #[display(fmt = "cmp")]
     CompareSubtract,
     /// Set condition codes on `Op1 + Op2`; mnemonic `cmn`.
+    #[display(fmt = "cmn")]
     CompareAdd,
     /// `Rd := Op1 OR Op2`; mnemonic `orr`.
+    #[display(fmt = "orr")]
     InclusiveOr,
     /// `Rd := Op2`; mnemonic `mov`.
+    #[display(fmt = "mov")]
     Move,
     /// `Rd := Op1 AND NOT Op2`; mnemonic `bic`.
+    #[display(fmt = "bic")]
     BitClear,
     /// `Rd := NOT Op2`; mnemonic `mvn`.
+    #[display(fmt = "mvn")]
     MoveInverse,
 }
 
 /// The types of register value manipulation that can be performed in a
 /// register-shift operand for data processing instructions.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Copy, Clone, Debug, Display, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 #[repr(u32)]
 pub enum ShiftType {
     /// Perform a logical left shift, shifting the value of the register to the
@@ -108,6 +139,7 @@ pub enum ShiftType {
     /// carry flag is set to the value of the least significant bit that was
     /// shifted out for *logical* operations only; if the shift amount is `0`,
     /// this flag is not modified.  Mnemonic: `lsl`.
+    #[display(fmt = "lsl")]
     LogicalShiftLeft,
     /// Perform a logical right shift, shifting the value of the register to the
     /// right by the specified number of bits without sign extension and
@@ -116,12 +148,14 @@ pub enum ShiftType {
     /// resulting in the entire value of the register being shifted out.  For
     /// *logical* operations, the carry flag is set to the most significant bit
     /// that was shifted out.  Mnemonic: `lsr`.
+    #[display(fmt = "lsr")]
     LogicalShiftRight,
     /// Perform an arithmetic right shift, which is identical to the logical
     /// right shift except the most significant bit of the source register's
     /// value will be extended through all the most significant values shifted
     /// in.  This behaviour approximates two's complement division by a power of
     /// 2 for both signed and unsigned values.  Mnemonic: `asr`.
+    #[display(fmt = "asr")]
     ArithmeticShiftRight,
     /// Perform a rightward rotation, in which the value of the register is
     /// shifted to the right by the specified amount and the values carried out
@@ -132,6 +166,7 @@ pub enum ShiftType {
     /// mnemonic for this form of the shift is `rrx` and is only used when
     /// shifting by an immediate `#0`.  The carry flag is modified as in the
     /// other shift types.
+    #[display(fmt = "ror")]
     RotateRight,
 }
 
@@ -256,17 +291,22 @@ pub enum BlockTransferMode {
 
 /// The amount of data and byte order to be transferred in a single data
 /// transfer instruction.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Display, Eq, PartialEq)]
 pub enum SingleTransferType {
     /// Transfer a zero-extended 8-bit value.
+    #[display(fmt = "b")]
     UnsignedByte,
     /// Transfer a sign-extended 8-bit value.
+    #[display(fmt = "sb")]
     SignedByte,
     /// Transfer a zero-extended 16-bit value.
+    #[display(fmt = "h")]
     UnsignedHalfWord,
     /// Transfer a sign-extended 16-bit value.
+    #[display(fmt = "sh")]
     SignedHalfWord,
     /// Transfer a 32-bit value.
+    #[display(fmt = "")]
     Word,
 }
 
