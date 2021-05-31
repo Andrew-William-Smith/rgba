@@ -186,7 +186,7 @@ impl Cpu {
 
     /// Compute the index of the SPSR for the current mode in the `status` field
     /// of the CPU.
-    fn mode_index(&self) -> usize {
+    fn spsr_index(&self) -> usize {
         match self.cpsr().mode {
             Mode::FastInterrupt => 1,
             Mode::Interrupt => 2,
@@ -211,7 +211,7 @@ impl Cpu {
     /// returned if the CPU is in either of those modes.
     #[must_use]
     pub fn spsr(&self) -> &StatusRegister {
-        &self.status[self.mode_index()]
+        &self.status[self.spsr_index()]
     }
 }
 
@@ -240,8 +240,8 @@ impl Default for Cpu {
 impl fmt::Display for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for i in 0..=15 {
-            // Write the separator character: 4 registers per line.
             if i != 0 {
+                // Write the separator character: 4 registers per line.
                 write!(f, "{}", if i % 4 == 0 { '\n' } else { ' ' })?;
             }
 

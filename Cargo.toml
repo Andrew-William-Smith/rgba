@@ -8,5 +8,9 @@ edition = "2018"
 
 [dependencies]
 derive_more = "0.99.14"
+env_logger = "0.8.3"
+log = "0.4.14"
 num-derive = "0.3.3"
 num-traits = "0.2.14"
+structopt = "0.3.21"
+structopt-derive = "0.4.14"
